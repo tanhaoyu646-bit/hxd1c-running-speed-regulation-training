@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#06131d">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23061925'/%3E%3Cpath d='M13 39h38M18 39V20h28v19M24 48l5-9m11 9-5-9' stroke='%2358d7ff' stroke-width='5' fill='none'/%3E%3Ccircle cx='25' cy='29' r='3' fill='%23f0c457'/%3E%3Ccircle cx='39' cy='29' r='3' fill='%23f0c457'/%3E%3C/svg%3E">
+  <title>HXD1C 途中调速实操考评</title>
+  <link rel="stylesheet" href="./styles/speed-regulation.css">
+</head>
+<body>
+  <main class="training-app" aria-label="HXD1C途中调速实操考评">
+    <section class="stage" id="stage">
+      <canvas id="route-scene" aria-label="列车运行线路"></canvas>
+      <img id="cab-view" class="cab-view" src="./assets/archive-cabview/HXD1C_front.png" alt="HXD1C司机室">
+      <div id="cab-overlay" class="cab-overlay"></div>
+
+      <header class="toolbar">
+        <button type="button" id="callout" class="toolbar-button callout">呼唤确认</button>
+        <button type="button" id="progress-toggle" class="toolbar-button">考评进度 <b id="progress-count">0/7</b></button>
+        <button type="button" id="rules-toggle" class="toolbar-button">考评说明</button>
+        <button type="button" id="view-toggle" class="toolbar-button">视角</button>
+        <button type="button" id="data-toggle" class="toolbar-button">运行数据</button>
+        <button type="button" id="fullscreen" class="toolbar-button icon-button" aria-label="全屏">⛶</button>
+      </header>
+
+      <nav id="view-menu" class="view-menu" aria-label="驾驶视角">
+        <button data-view="front" class="active">前方</button><button data-view="left">左侧</button><button data-view="right">右侧</button><button data-view="rearLeft">左后</button><button data-view="rearRight">右后</button>
+      </nav>
+
+      <aside id="progress-panel" class="side-panel" aria-hidden="true">
+        <div class="panel-head"><strong>考评记录</strong><button data-close-panel>×</button></div>
+        <p>系统只显示记录状态，不提示下一步操作。</p>
+        <ol id="progress-list"></ol>
+      </aside>
+
+      <aside id="rules-panel" class="side-panel" aria-hidden="true">
+        <div class="panel-head"><strong>考评说明</strong><button data-close-panel>×</button></div>
+        <ul>
+          <li>按实际乘务作业要求完成途中调速，全程不提供操作顺序提示。</li>
+          <li>LKJ 报警、卸载和制动均作用于本次列车运行状态。</li>
+          <li>进站信号机处速度不得超过 45 km/h；触发监控常用或紧急制动按安全红线处理。</li>
+          <li>普通失误记录扣分并继续运行，考评结束后统一显示评分明细。</li>
+        </ul>
+      </aside>
+
+      <aside id="data-panel" class="side-panel data-panel" aria-hidden="true">
+        <div class="panel-head"><strong>运行数据</strong><button data-close-panel>×</button></div>
+        <dl id="run-data"></dl>
+      </aside>
+
+      <div id="status-strip" class="status-strip" aria-live="polite">
+        <b id="skill-name">途中调速</b><span id="phase-name">准备开始</span><em id="status-message">仅考评模式</em>
+      </div>
+
+      <section id="lkj-dock" class="lkj-dock" aria-hidden="true">
+        <button type="button" class="lkj-close" data-lkj-close aria-label="关闭LKJ放大界面">×</button>
+        <div class="lkj-device">
+          <img src="./assets/lkj/native-states/main-blank.png" alt="LKJ2000监控装置">
+          <div class="lkj-screen"></div>
+          <div class="lkj-keypad"></div>
+        </div>
+      </section>
+
+      <section id="skill-picker" class="modal open">
+        <div class="picker-card">
+          <span class="eyebrow">HXD1C · 机车乘务实操</span>
+          <h1>途中调速考评</h1>
+          <p>请选择考评技能。两个技能分别建立独立考评记录，不提供教学模式与步骤提示。</p>
+          <div class="skill-grid">
+            <button type="button" data-scenario="oneStage"><b>途中一段制动调速</b><span>初速 115 km/h · 距进站信号机约 2 km</span><em>开始考评</em></button>
+            <button type="button" data-scenario="twoStage"><b>途中两段制动调速</b><span>初速 120 km/h · 距进站信号机约 4.5 km</span><em>开始考评</em></button>
+          </div>
+          <small>项目数据仅保存在本项目浏览器空间，不读取或写入其他训练项目。</small>
+        </div>
+      </section>
+
+      <section id="result-modal" class="modal" aria-hidden="true">
+        <div class="result-card">
+          <span class="eyebrow">考评结束</span>
+          <h2 id="result-title">考评结果</h2>
+          <div class="result-score"><b id="result-score">0</b><span>分</span><em id="result-grade">—</em></div>
+          <p id="result-summary"></p>
+          <div id="result-categories" class="result-categories"></div>
+          <div class="result-actions"><button type="button" id="retry">重新考评</button><button type="button" id="choose-skill">选择其他技能</button></div>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="./scripts/speedRegulationApp.js"></script>
+</body>
+</html>
