@@ -37,6 +37,16 @@ const LOOKOUT_ROUTE_RENDER_OPTIONS = Object.freeze({
   sourceDepartureSignal: true,
 });
 
+// 途中调速区段包含连续桥梁、邻线及隧道。这里必须保留原 NEIYI 世界块中的
+// TrackObj，不能像途中瞭望一样删除主线后再铺单条程序化轨道，否则会把约 5 m
+// 外的邻线一并清掉，并让重建轨面被桥面模型遮住。
+const SPEED_REGULATION_ROUTE_RENDER_OPTIONS = Object.freeze({
+  proceduralTrack: false,
+  railHighlights: false,
+  continuousRailHeads: false,
+  sourceDepartureSignal: false,
+});
+
 // 电分相考核使用独立、按教学里程布置的标志。原线路在同一走廊内还带有
 // 既有断电牌、禁止双弓牌、曲线牌和信号机，若同时渲染会造成重复和错序。
 const POWER_TRAINING_SUPPRESSED_SHAPES = /^(?:duan|jinzhi-shuanggong|quxianbiao|qiaoliangbiao)\.s$/i;
@@ -51,7 +61,9 @@ export class MstsRouteScene {
     this.isCorridor = this.isLookout || this.isPowerTraining || this.isSpeedRegulation;
     this.routeWindow = options.routeWindow || null;
     this.usesCustomSignals = this.isPowerTraining || this.isSpeedRegulation;
-    this.renderOptions = this.isCorridor ? LOOKOUT_ROUTE_RENDER_OPTIONS : DEFAULT_ROUTE_RENDER_OPTIONS;
+    this.renderOptions = this.isSpeedRegulation
+      ? SPEED_REGULATION_ROUTE_RENDER_OPTIONS
+      : this.isCorridor ? LOOKOUT_ROUTE_RENDER_OPTIONS : DEFAULT_ROUTE_RENDER_OPTIONS;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     const coarse = matchMedia('(pointer: coarse)').matches;
     this.renderer.setPixelRatio(Math.min(devicePixelRatio || 1, coarse ? 1.15 : 1.5));
@@ -397,7 +409,7 @@ export class MstsRouteScene {
       ? Math.min(this.pathLength, Number(this.routeWindow.end) || this.pathLength)
       : LOOKOUT_TRAINING_CONFIG.finishDistance + 500;
     const corridorLateral = this.routeWindow ? Math.max(100, Number(this.routeWindow.lateral) || 650) : 450;
-    const sourceTrackClearance = this.isSpeedRegulation ? 10 : 4.2;
+    const sourceTrackClearance = 4.2;
     data.instances.forEach((instance) => {
       const projection = this.isCorridor
         ? this.projectPointToPath(instance.position, corridorEnd)
@@ -457,12 +469,16 @@ export class MstsRouteScene {
           && trackProjection.alongDistance >= corridorStart
           && trackProjection.alongDistance <= corridorEnd) return;
       }
-      if (!instancesByShape.has(instance.shape)) instancesByShape.set(instance.shape, []);
-      instancesByShape.get(instance.shape).push(instance);
+      // MSTS 世界块对模型文件名大小写不敏感，而 GitHub Pages/JavaScript Map
+      // 区分大小写。原区段有82个实例使用了 Strt/strt 混合写法，其中包含
+      // 桥面上的 A1t 主线轨道；统一键名后才能完整恢复这些原轨道构件。
+      const shapeKey = String(instance.shape || '').toLowerCase();
+      if (!instancesByShape.has(shapeKey)) instancesByShape.set(shapeKey, []);
+      instancesByShape.get(shapeKey).push(instance);
     });
 
     Object.values(data.shapes).forEach((shape) => {
-      const instances = instancesByShape.get(shape.fileName) || [];
+      const instances = instancesByShape.get(String(shape.fileName || '').toLowerCase()) || [];
       if (!instances.length) return;
       shape.groups.forEach((group, groupIndex) => {
         if (!group.positions?.length) return;

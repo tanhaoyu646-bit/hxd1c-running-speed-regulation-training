@@ -24,6 +24,27 @@ export class SpeedRegulationScene extends MstsRouteScene {
     this.applyCamera();
   }
 
+  setScenario(scenario) {
+    this.speedScenario = scenario;
+    this.startOffset = scenario.startOffset;
+    if (!this.ready) return;
+    for (const signal of this.speedSignals) {
+      signal.root.removeFromParent();
+      signal.root.traverse((object) => {
+        object.geometry?.dispose?.();
+        const materials = Array.isArray(object.material) ? object.material : [object.material];
+        for (const material of materials) {
+          if (!material) continue;
+          if (material.map && material.map !== this.signalGlowTexture) material.map.dispose?.();
+          material.dispose?.();
+        }
+      });
+    }
+    this.speedSignals = [];
+    this.buildSpeedSignals();
+    this.applyCamera();
+  }
+
   buildSpeedSignals() {
     const glowMap = this.createSignalGlowTexture();
     for (const config of this.speedScenario.signals) {

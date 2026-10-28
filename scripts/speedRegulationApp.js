@@ -33,6 +33,25 @@ let candidateAttempt = null;
 const overlay = $('#cab-overlay');
 const elements = {};
 
+function preloadRouteScene() {
+  const storedScenarioId = localStorage.getItem(`${PROJECT_ID}:last-scenario`);
+  const scenario = getScenario(storedScenarioId);
+  routeScene = new SpeedRegulationScene($('#route-scene'), scenario);
+  const loadStatus = $('#candidate-load-status');
+  routeScene.loadPromise.then(() => {
+    if (loadStatus) {
+      loadStatus.textContent = '线路环境已加载，可以进入考评。';
+      loadStatus.dataset.state = 'ready';
+    }
+  }).catch((error) => {
+    if (loadStatus) {
+      loadStatus.textContent = `线路环境加载失败：${error.message}`;
+      loadStatus.dataset.state = 'error';
+    }
+    $('#status-message').textContent = `线路加载失败：${error.message}`;
+  });
+}
+
 function syncVisualViewport() {
   const viewport = window.visualViewport;
   document.documentElement.style.setProperty('--visual-height', `${viewport?.height || window.innerHeight}px`);
@@ -195,13 +214,8 @@ function chooseScenario(id) {
   lkj.simulation = simulation;
   lkj.page = 'main';
   lkj.menuIndex = 0;
-  routeScene?.resizeObserver?.disconnect();
-  routeScene?.renderer?.dispose();
-  const oldCanvas = $('#route-scene');
-  const newCanvas = oldCanvas.cloneNode(false);
-  oldCanvas.replaceWith(newCanvas);
-  routeScene = new SpeedRegulationScene(newCanvas, scenario);
-  routeScene.loadPromise.catch((error) => { $('#status-message').textContent = `线路加载失败：${error.message}`; });
+  if (routeScene) routeScene.setScenario(scenario);
+  else preloadRouteScene();
   simulation.addEventListener('change', () => render());
   simulation.addEventListener('complete', () => showResult());
   localStorage.setItem(`${PROJECT_ID}:last-scenario`, scenario.id);
@@ -333,6 +347,7 @@ window.addEventListener('keydown', (event) => {
 });
 
 window.__speedRegulation = { get simulation() { return simulation; }, get assessment() { return assessment; }, chooseScenario };
+preloadRouteScene();
 setupCandidateGate();
 render();
 requestAnimationFrame(animationFrame);

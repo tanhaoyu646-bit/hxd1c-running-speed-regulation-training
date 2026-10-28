@@ -4,7 +4,8 @@ export const CAB = Object.freeze({ width: 640, height: 480 });
 
 export const SPEED_ROUTE_WINDOW = Object.freeze({
   start: 23_500,
-  end: 29_650,
+  // 保留大山铺前桥梁、邻线以及 30.24–31.86 km 原生隧道的完整世界块。
+  end: 32_050,
   lateral: 650,
 });
 
