@@ -2,6 +2,12 @@ export const PROJECT_ID = 'hxd1c-running-speed-regulation-v1';
 
 export const CAB = Object.freeze({ width: 640, height: 480 });
 
+export const SPEED_ROUTE_WINDOW = Object.freeze({
+  start: 23_500,
+  end: 29_650,
+  lateral: 650,
+});
+
 export const SCENARIOS = Object.freeze({
   oneStage: Object.freeze({
     id: 'oneStage',
@@ -10,6 +16,7 @@ export const SCENARIOS = Object.freeze({
     initialSpeed: 115,
     initialTraction: 2,
     startOffset: 26880,
+    routeWindow: SPEED_ROUTE_WINDOW,
     entryDistance: 2000,
     finishDistance: 2050,
     targetSpeed: 40,
@@ -34,6 +41,7 @@ export const SCENARIOS = Object.freeze({
     initialSpeed: 120,
     initialTraction: 2,
     startOffset: 24380,
+    routeWindow: SPEED_ROUTE_WINDOW,
     entryDistance: 4500,
     finishDistance: 4550,
     targetSpeed: 40,

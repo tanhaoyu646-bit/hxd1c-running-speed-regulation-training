@@ -9,6 +9,7 @@ const SOURCE_PATH = new URL('../assets/msts-neiyi-corridor/neiyi-lookout-full-sc
 const ROUTE_PATH = new URL('../assets/msts-neiyi/neiyi-5635-trackdb-path.json', import.meta.url).href;
 const TERRAIN_PATH = new URL('../assets/msts-neiyi-corridor/neiyi-lookout-terrain.json', import.meta.url).href;
 const LOOKOUT_TERRAIN_PATH = new URL('../assets/msts-neiyi-corridor/neiyi-lookout-terrain-native.json', import.meta.url).href;
+const SPEED_REGULATION_TERRAIN_PATH = new URL('../assets/msts-neiyi-corridor/neiyi-speed-regulation-terrain.json', import.meta.url).href;
 const LOOKOUT_PREFAB_PATH = new URL('../assets/msts-neiyi-corridor/lookout-source-prefabs.json', import.meta.url).href;
 const LOOKOUT_REPAIR_ASSET_PATH = new URL('../assets/msts-neiyi-corridor/lookout-repair-assets.json', import.meta.url).href;
 const TEXTURE_PATH = new URL('../assets/msts-neiyi-corridor/textures/', import.meta.url).href;
@@ -46,7 +47,10 @@ export class MstsRouteScene {
     this.profile = options.profile || 'departure';
     this.isLookout = this.profile === 'lookout';
     this.isPowerTraining = this.profile === 'power-training';
-    this.isCorridor = this.isLookout || this.isPowerTraining;
+    this.isSpeedRegulation = this.profile === 'speed-regulation';
+    this.isCorridor = this.isLookout || this.isPowerTraining || this.isSpeedRegulation;
+    this.routeWindow = options.routeWindow || null;
+    this.usesCustomSignals = this.isPowerTraining || this.isSpeedRegulation;
     this.renderOptions = this.isCorridor ? LOOKOUT_ROUTE_RENDER_OPTIONS : DEFAULT_ROUTE_RENDER_OPTIONS;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     const coarse = matchMedia('(pointer: coarse)').matches;
@@ -121,7 +125,9 @@ export class MstsRouteScene {
       const requests = [
         fetch(SOURCE_PATH, { cache: 'no-store' }),
         fetch(ROUTE_PATH, { cache: 'no-store' }),
-        fetch(this.isCorridor ? LOOKOUT_TERRAIN_PATH : TERRAIN_PATH, { cache: 'no-store' }),
+        fetch(this.isSpeedRegulation
+          ? SPEED_REGULATION_TERRAIN_PATH
+          : this.isCorridor ? LOOKOUT_TERRAIN_PATH : TERRAIN_PATH, { cache: 'no-store' }),
       ];
       if (this.isCorridor) {
         requests.push(fetch(LOOKOUT_PREFAB_PATH, { cache: 'no-store' }));
@@ -158,15 +164,16 @@ export class MstsRouteScene {
       this.buildPassengerConsist(12);
       // 瞭望项目的本务主线在加载时一次性生成到 TrackDB 路径终点。
       // 课程仍在6 km结算，但不再因考核终点人为截断三维钢轨。
-      const renderedRouteDistance = this.isCorridor
-        ? this.pathLength
+      const renderedRouteDistance = this.routeWindow
+        ? Math.min(this.pathLength, Number(this.routeWindow.end) + 350)
+        : this.isCorridor ? this.pathLength
         : Math.min(this.pathLength, LOOKOUT_TRAINING_CONFIG.finishDistance + 350);
       const railEvent = LOOKOUT_TRAINING_CONFIG.events.find((item) => item.visualKind === 'rail');
       if (this.renderOptions.proceduralTrack) this.buildSelectedRouteTrack(renderedRouteDistance);
       if (this.renderOptions.railHighlights) this.buildRailHighlights(renderedRouteDistance, railEvent);
       if (this.renderOptions.continuousRailHeads) this.buildContinuousRailHeads(renderedRouteDistance);
-      if (this.renderOptions.sourceDepartureSignal && !this.isPowerTraining) this.buildSourceDepartureSignal(sceneData);
-      if (!this.isPowerTraining) this.buildSourceRouteSignalLights(sceneData);
+      if (this.renderOptions.sourceDepartureSignal && !this.usesCustomSignals) this.buildSourceDepartureSignal(sceneData);
+      if (!this.usesCustomSignals) this.buildSourceRouteSignalLights(sceneData);
       if (this.isLookout) this.buildLookoutTrainingScenery(sceneData, prefabData, repairAssetData);
       this.ready = true;
       this.applyCamera();
@@ -243,7 +250,9 @@ export class MstsRouteScene {
       geometry.computeBoundingSphere();
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = `MSTS_TERRAIN_${tile.tileX}_${tile.tileZ}`;
-      mesh.frustumCulled = true;
+      // 训练区段位于 MSTS 大坐标后段，关闭少量地形块的包围球裁剪，
+      // 避免驾驶视点已进入地形块但浏览器仍将其误判到视锥外。
+      mesh.frustumCulled = false;
       root.add(mesh);
     }
     this.routeRoot.add(root);
@@ -254,10 +263,15 @@ export class MstsRouteScene {
   buildTerrainCorridorIndex() {
     const cellSize = 32;
     const outerWidth = 24;
-    const maximumDistance = Math.min(this.pathLength, LOOKOUT_TRAINING_CONFIG.finishDistance + 350);
+    const minimumDistance = this.routeWindow ? Math.max(0, Number(this.routeWindow.start) || 0) : 0;
+    const maximumDistance = Math.min(
+      this.pathLength,
+      this.routeWindow ? Number(this.routeWindow.end) || this.pathLength : LOOKOUT_TRAINING_CONFIG.finishDistance + 350,
+    );
     const cells = new Map();
     const segments = [];
     for (let index = 1; index < this.routePoints.length; index += 1) {
+      if (this.routeDistances[index] < minimumDistance) continue;
       if (this.routeDistances[index - 1] > maximumDistance) break;
       const a = this.routePoints[index - 1];
       const b = this.routePoints[index];
@@ -378,18 +392,25 @@ export class MstsRouteScene {
 
   buildRoute(data) {
     const instancesByShape = new Map();
+    const corridorStart = this.routeWindow ? Math.max(0, Number(this.routeWindow.start) || 0) : 0;
+    const corridorEnd = this.routeWindow
+      ? Math.min(this.pathLength, Number(this.routeWindow.end) || this.pathLength)
+      : LOOKOUT_TRAINING_CONFIG.finishDistance + 500;
+    const corridorLateral = this.routeWindow ? Math.max(100, Number(this.routeWindow.lateral) || 650) : 450;
+    const sourceTrackClearance = this.isSpeedRegulation ? 10 : 4.2;
     data.instances.forEach((instance) => {
       const projection = this.isCorridor
-        ? this.projectPointToPath(instance.position, LOOKOUT_TRAINING_CONFIG.finishDistance + 500)
+        ? this.projectPointToPath(instance.position, corridorEnd)
         : null;
       if (this.isCorridor) {
-        // 瞭望项目只保留0–6 km教学走廊及其周边可见场景，不把原线路
+        // 每个专项只保留自己的教学里程窗口及周边可见场景，不把原线路
         // 数十公里的远程实例一起提交给渲染器。
         if (!projection
-          || projection.alongDistance > LOOKOUT_TRAINING_CONFIG.finishDistance + 500
-          || projection.lateralDistance > 450) return;
+          || projection.alongDistance < corridorStart
+          || projection.alongDistance > corridorEnd
+          || projection.lateralDistance > corridorLateral) return;
         const tunnel = LOOKOUT_TRAINING_CONFIG.events.find((item) => item.visualKind === 'tunnel');
-        const insideTeachingTunnel = projection
+        const insideTeachingTunnel = this.isLookout && projection
           && projection.alongDistance >= tunnel.tunnelStartDistance - 4
           && projection.alongDistance <= tunnel.tunnelEndDistance + 4
           && Math.abs(projection.signedLateral) <= 12;
@@ -399,7 +420,7 @@ export class MstsRouteScene {
 
         // 本项目只显示与当前考核相关、由 powerTrainingScene 按正确顺序
         // 放置的标志；保留原项目中的这些对象会叠出第二套错误序列。
-        if (this.isPowerTraining && (
+        if (this.usesCustomSignals && (
           instance.type === 'SignalObj'
           || POWER_TRAINING_SUPPRESSED_SHAPES.test(instance.shape || '')
         )) return;
@@ -407,7 +428,7 @@ export class MstsRouteScene {
         // 原接触网杆的对象原点位于原轨道中心，真正的杆柱约在局部 +X 3 m。
         // 主线中心线重建后，少数杆柱会侵入新线路。按实际杆柱位置做净空判断，
         // 将侵线杆记录下来，稍后沿最终中心线原位重建，而不是只删掉造成断档。
-        if (/^SweGantry1\.s$/i.test(instance.shape || '')) {
+        if (this.isLookout && /^SweGantry1\.s$/i.test(instance.shape || '')) {
           const instancePosition = new THREE.Vector3().fromArray(instance.position);
           const instanceQuaternion = new THREE.Quaternion().fromArray(instance.quaternion).normalize();
           const mastPosition = new THREE.Vector3(3, 0, 0).applyQuaternion(instanceQuaternion).add(instancePosition);
@@ -423,16 +444,18 @@ export class MstsRouteScene {
       if (this.renderOptions.proceduralTrack && instance.type === 'TrackObj' && /^A\d+t/i.test(instance.shape || '')) {
         const trackProjection = projection || this.projectPointToPath(instance.position);
         if (trackProjection
-          && trackProjection.lateralDistance < 4.2
-          && trackProjection.alongDistance <= LOOKOUT_TRAINING_CONFIG.finishDistance + 500) return;
+          && trackProjection.lateralDistance < sourceTrackClearance
+          && trackProjection.alongDistance >= corridorStart
+          && trackProjection.alongDistance <= corridorEnd) return;
       }
       if (this.renderOptions.continuousRailHeads && instance.type === 'TrackObj' && /^A\d+t/i.test(instance.shape || '')) {
         const trackProjection = projection || this.projectPointToPath(instance.position);
         // 原分节主线轨道在 WebGL 中的接缝和交叠会造成假分岔；主线由
         // 同一中心线的实体钢轨头和连续轨枕承担，保留侧线和其他原轨道场景。
         if (trackProjection
-          && trackProjection.lateralDistance < 4.2
-          && trackProjection.alongDistance <= LOOKOUT_TRAINING_CONFIG.finishDistance + 500) return;
+          && trackProjection.lateralDistance < sourceTrackClearance
+          && trackProjection.alongDistance >= corridorStart
+          && trackProjection.alongDistance <= corridorEnd) return;
       }
       if (!instancesByShape.has(instance.shape)) instancesByShape.set(instance.shape, []);
       instancesByShape.get(instance.shape).push(instance);

@@ -3,6 +3,14 @@ import { SpeedRegulationSimulation } from './speedRegulationSimulation.js';
 import { SpeedRegulationAssessment } from './speedRegulationAssessment.js';
 import { SpeedRegulationScene } from './speedRegulationScene.js';
 import { LkjRuntime } from './lkjRuntime.js';
+import {
+  clearCandidateDraft,
+  createCandidateAttempt,
+  formatAttemptTime,
+  loadCandidateDraft,
+  saveCandidateDraft,
+  validateCandidate,
+} from './speedRegulationCandidate.js';
 
 const $ = (selector) => document.querySelector(selector);
 const pct = (value, total) => `${value / total * 100}%`;
@@ -20,8 +28,64 @@ let resultShown = false;
 let activeDrag = null;
 let audioContext = null;
 let lastAlertLevel = 'normal';
+let candidateProfile = null;
+let candidateAttempt = null;
 const overlay = $('#cab-overlay');
 const elements = {};
+
+function syncVisualViewport() {
+  const viewport = window.visualViewport;
+  document.documentElement.style.setProperty('--visual-height', `${viewport?.height || window.innerHeight}px`);
+  document.documentElement.style.setProperty('--visual-offset-top', `${viewport?.offsetTop || 0}px`);
+}
+
+function updateCandidateGate() {
+  const name = $('#candidate-name');
+  const studentId = $('#candidate-student-id');
+  const submit = $('#candidate-submit');
+  const error = $('#candidate-error');
+  const validation = validateCandidate({ name: name?.value, studentId: studentId?.value });
+  name?.setAttribute('aria-invalid', String(Boolean(name?.value) && validation.field === 'name'));
+  studentId?.setAttribute('aria-invalid', String(Boolean(studentId?.value) && validation.field === 'studentId'));
+  if (error) error.textContent = (name?.value || studentId?.value) && !validation.valid ? validation.message : '';
+  if (submit) {
+    submit.disabled = !validation.valid;
+    submit.textContent = validation.valid ? '进入考评' : '请填写姓名和学号';
+  }
+  return validation;
+}
+
+function setupCandidateGate() {
+  const form = $('#candidate-form');
+  const name = $('#candidate-name');
+  const studentId = $('#candidate-student-id');
+  const gate = $('#candidate-gate');
+  const app = $('.training-app');
+  const draft = loadCandidateDraft();
+  name.value = draft.name;
+  studentId.value = draft.studentId;
+  for (const input of [name, studentId]) {
+    input.addEventListener('input', updateCandidateGate);
+    input.addEventListener('focus', syncVisualViewport);
+  }
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const validation = updateCandidateGate();
+    if (!validation.valid) {
+      (validation.field === 'name' ? name : studentId).focus();
+      return;
+    }
+    candidateProfile = saveCandidateDraft(validation.candidate);
+    gate.hidden = true;
+    document.body.classList.remove('candidate-entry-active');
+    app.inert = false;
+    syncVisualViewport();
+  });
+  window.visualViewport?.addEventListener('resize', syncVisualViewport);
+  window.visualViewport?.addEventListener('scroll', syncVisualViewport);
+  syncVisualViewport();
+  updateCandidateGate();
+}
 
 function makeSprite(id, image, x, y, width, height, columns, rows, label) {
   const element = document.createElement('div');
@@ -117,7 +181,15 @@ window.addEventListener('pointerup', (event) => { if (activeDrag?.pointerId === 
 window.addEventListener('pointercancel', () => { activeDrag = null; });
 
 function chooseScenario(id) {
+  if (!candidateProfile) {
+    $('#candidate-gate').hidden = false;
+    document.body.classList.add('candidate-entry-active');
+    $('.training-app').inert = true;
+    $('#candidate-name').focus();
+    return;
+  }
   const scenario = getScenario(id);
+  candidateAttempt = createCandidateAttempt(candidateProfile);
   simulation = new SpeedRegulationSimulation(scenario.id);
   assessment = new SpeedRegulationAssessment(simulation);
   lkj.simulation = simulation;
@@ -197,6 +269,10 @@ function showResult() {
   if (resultShown) return;
   resultShown = true;
   const result = assessment.result();
+  $('#result-name').textContent = candidateAttempt?.name || '—';
+  $('#result-student-id').textContent = candidateAttempt?.studentId || '—';
+  $('#result-started-at').textContent = formatAttemptTime(candidateAttempt?.startedAt);
+  $('#result-finished-at').textContent = formatAttemptTime(new Date());
   $('#result-score').textContent = result.score;
   $('#result-grade').textContent = result.summary;
   $('.result-score').classList.toggle('fail', !result.qualified);
@@ -251,10 +327,12 @@ document.querySelectorAll('[data-close-panel]').forEach((button) => button.addEv
 $('#fullscreen').addEventListener('click', () => document.fullscreenElement ? document.exitFullscreen() : $('#stage').requestFullscreen());
 $('#retry').addEventListener('click', () => chooseScenario(simulation.state.scenarioId));
 $('#choose-skill').addEventListener('click', () => { $('#result-modal').classList.remove('open'); $('#skill-picker').classList.add('open'); });
+$('#change-candidate').addEventListener('click', () => { clearCandidateDraft(); location.reload(); });
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') { document.querySelectorAll('.side-panel').forEach((panel) => panel.classList.remove('open')); $('#view-menu').classList.remove('open'); lkj.close(); }
 });
 
 window.__speedRegulation = { get simulation() { return simulation; }, get assessment() { return assessment; }, chooseScenario };
+setupCandidateGate();
 render();
 requestAnimationFrame(animationFrame);

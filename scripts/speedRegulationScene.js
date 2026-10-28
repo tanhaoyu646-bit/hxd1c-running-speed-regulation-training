@@ -11,7 +11,7 @@ const ASPECT_COLORS = Object.freeze({
 
 export class SpeedRegulationScene extends MstsRouteScene {
   constructor(canvas, scenario) {
-    super(canvas, { profile: 'power-training' });
+    super(canvas, { profile: 'speed-regulation', routeWindow: scenario.routeWindow });
     this.speedScenario = scenario;
     this.startOffset = scenario.startOffset;
     this.speedSignals = [];
