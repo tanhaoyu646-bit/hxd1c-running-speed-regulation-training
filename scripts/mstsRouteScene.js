@@ -37,13 +37,13 @@ const LOOKOUT_ROUTE_RENDER_OPTIONS = Object.freeze({
   sourceDepartureSignal: true,
 });
 
-// 途中调速区段包含连续桥梁、邻线及隧道。这里必须保留原 NEIYI 世界块中的
-// TrackObj，不能像途中瞭望一样删除主线后再铺单条程序化轨道，否则会把约 5 m
-// 外的邻线一并清掉，并让重建轨面被桥面模型遮住。
+// 途中调速的原 TrackObj 在部分竖曲线上与 TrackDB 高程相差数米，
+// 直接驾驶会出现跳坡和断轨。本务线改用原 TrackDB 中心线连续重建；
+// 4.2 m 外的邻线、桥梁、隧道和其他世界对象仍保留原场景。
 const SPEED_REGULATION_ROUTE_RENDER_OPTIONS = Object.freeze({
-  proceduralTrack: false,
+  proceduralTrack: true,
   railHighlights: false,
-  continuousRailHeads: false,
+  continuousRailHeads: true,
   sourceDepartureSignal: false,
 });
 
@@ -332,7 +332,9 @@ export class MstsRouteScene {
     const blend = bestDistance <= index.innerWidth
       ? 1
       : 1 - THREE.MathUtils.smoothstep(bestDistance, index.innerWidth, index.outerWidth);
-    const corridorCap = railwayHeight + 0.02;
+    // 连续本务线的轨面以 TrackDB 中心高程为基准。地形贴到轨面会遮挡
+    // 轨枕和道床，统一下压 0.24 m，但不改动桥面、隧道等原场景模型。
+    const corridorCap = railwayHeight - 0.24;
     return Math.min(sourceHeight, THREE.MathUtils.lerp(sourceHeight, corridorCap, blend));
   }
 
@@ -513,9 +515,16 @@ export class MstsRouteScene {
 
   buildRoutePath(data, sceneData) {
     // 原中心线只包含轨道构件连接点。直接线性插值会在曲线连接处走弦线，
-    // 驾驶视点离开站场后看起来会切出钢轨。使用相邻真实 TrackObj 的朝向
-    // 构造 Hermite 中心线，并以约5 m间距重采样，使位置和朝向连续贴合线路。
-    const alignedPoints = buildRailAlignedPath(data.positions, sceneData?.instances, { spacing: 5 });
+    // 驾驶视点离开站场后看起来会切出钢轨。X/Z 使用有序 TrackDB 节点
+    // 构造 Hermite 中心线，Y 按 TrackDB 高程进行受限插值，并以约 5 m 间距重采样。
+    const alignedPoints = buildRailAlignedPath(data.positions, sceneData?.instances, {
+      spacing: 5,
+      // 途中调速区段的原 TrackDB 有一个单节 52‰ 异常坡度，而前后均约 26‰。
+      // 将额外高差平滑分摊到后续 1.8 km，并在进站考核段前回归原高程。
+      normalizeVerticalProfile: this.isSpeedRegulation,
+      maximumGrade: 35,
+      recoveryDistance: 1800,
+    });
     this.routePoints = alignedPoints.map((point) => new THREE.Vector3(...point));
     this.routeDistances = cumulativePathDistances(alignedPoints);
     this.pathLength = this.routeDistances[this.routeDistances.length - 1];
@@ -597,6 +606,14 @@ export class MstsRouteScene {
     target.y = 0;
     if (target.lengthSq() < 0.000001) target.set(0, 0, -1);
     return target.normalize();
+  }
+
+  getPathGrade(distance = this.distance, sampleDistance = 18) {
+    const routeDistance = this.startOffset + Math.max(0, Number(distance) || 0);
+    const before = this.getPathPosition(Math.max(0, routeDistance - sampleDistance), new THREE.Vector3());
+    const after = this.getPathPosition(Math.min(this.pathLength, routeDistance + sampleDistance), new THREE.Vector3());
+    const horizontal = Math.hypot(after.x - before.x, after.z - before.z);
+    return horizontal > 0.001 ? (after.y - before.y) / horizontal * 1000 : 0;
   }
 
   updatePassengerConsist(startFraction = this.wholeTrainStartFraction ?? 1) {
@@ -1840,12 +1857,16 @@ export class MstsRouteScene {
   applyCamera() {
     const routeDistance = this.startOffset + this.distance;
     const position = this.getPathPosition(routeDistance);
-    const tangentStart = this.getPathPosition(Math.max(0, routeDistance - 3));
-    const tangentEnd = this.getPathPosition(Math.min(this.pathLength || routeDistance + 6, routeDistance + 6));
-    const tangent = tangentEnd.sub(tangentStart);
-    tangent.y = 0;
-    if (tangent.lengthSq() > 0.000001) this.forward.copy(tangent.normalize());
+    // 按机车前后转向架之间的轨道平均姿态计算驾驶视点。保留线路坡度，
+    // 避免固定水平相机在坡变点反复俯仰；18 m 取样基线同时滤除分节接缝抖动。
+    const tangentStart = this.getPathPosition(Math.max(0, routeDistance - 18));
+    const tangentEnd = this.getPathPosition(Math.min(this.pathLength || routeDistance + 18, routeDistance + 18));
+    const tangent3D = tangentEnd.sub(tangentStart);
+    if (tangent3D.lengthSq() > 0.000001) tangent3D.normalize();
+    else tangent3D.copy(this.forward);
+    this.forward.set(tangent3D.x, 0, tangent3D.z).normalize();
     const baseYaw = Math.atan2(-this.forward.x, -this.forward.z);
+    const trackPitch = Math.asin(THREE.MathUtils.clamp(tangent3D.y, -0.12, 0.12));
     const yawOffsets = {
       front: 0,
       left: THREE.MathUtils.degToRad(65),
@@ -1853,7 +1874,7 @@ export class MstsRouteScene {
       rearLeft: THREE.MathUtils.degToRad(165),
       rearRight: THREE.MathUtils.degToRad(-165),
     };
-    const pitchOffsets = { front: -0.22, left: -0.035, right: -0.035, rearLeft: -0.04, rearRight: -0.04 };
+    const pitchOffsets = { front: -0.035, left: -0.025, right: -0.025, rearLeft: -0.03, rearRight: -0.03 };
     const lateralOffsets = { front: 0, left: -0.7, right: 0.7, rearLeft: -3.2, rearRight: 3.2 };
     const longitudinalOffsets = { front: 0, left: 0, right: 0, rearLeft: -1.8, rearRight: -1.8 };
     const right = new THREE.Vector3(this.forward.z, 0, -this.forward.x);
@@ -1870,7 +1891,7 @@ export class MstsRouteScene {
     this.camera.rotation.order = 'YXZ';
     const pitchSway = Math.sin(pulseAge * 7.1) * 0.0028 * cabPulse;
     const rollSway = Math.sin(pulseAge * 5.8 + 0.7) * 0.0022 * cabPulse;
-    this.camera.rotation.set((pitchOffsets[this.view] ?? pitchOffsets.front) + pitchSway, baseYaw + (yawOffsets[this.view] || 0), rollSway);
+    this.camera.rotation.set(trackPitch + (pitchOffsets[this.view] ?? pitchOffsets.front) + pitchSway, baseYaw + (yawOffsets[this.view] || 0), rollSway);
   }
 
   resize() {

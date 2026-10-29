@@ -157,6 +157,12 @@ function createCabControls() {
   elements.sideRelease = makeBadge('side-release', '单缓', 113, 404, 68);
   elements.sideRelease.classList.add('side-release-control');
   elements.sideRelease.addEventListener('click', () => simulation.command('side-release', !simulation.state.sideRelease));
+  elements.cabLkj = document.createElement('div');
+  elements.cabLkj.className = 'cab-lkj-live';
+  elements.cabLkj.setAttribute('aria-label', '驾驶台LKJ实时显示');
+  elements.cabLkj.innerHTML = '<div class="cab-lkj-speed"><small>速度</small><b>0</b></div><div class="cab-lkj-limit"><small>限速</small><strong>0</strong></div><div class="cab-lkj-meta"><span>绿灯</span><em>0m</em></div>';
+  Object.assign(elements.cabLkj.style, { left: pct(221, CAB.width), top: pct(252, CAB.height), width: pct(76, CAB.width), height: pct(52, CAB.height) });
+  overlay.append(elements.cabLkj);
   makePhysical('放大LKJ监控装置', 210, 226, 101, 94, () => lkj.show(), 'lkj-hotspot');
 
   const controls = [
@@ -248,13 +254,14 @@ function render() {
   frame(elements.direction, s.direction === 'R' ? 0 : s.direction === 'N' ? 1 : 2, 3, 1);
   elements.autoBadge.querySelector('span').textContent = brakeNames[s.autoBrake];
   elements.independentBadge.querySelector('span').textContent = s.independentBrake ? `${s.independentBrake}级` : '缓解位';
-  elements.tractionBadge.querySelector('span').textContent = s.traction > 0 ? `牵引 ${s.traction}.0级` : s.traction < 0 ? `电制 ${Math.abs(s.traction)}级` : '零位';
+  elements.tractionBadge.querySelector('span').textContent = s.traction > 0 ? `牵引 ${s.traction}级` : s.traction < 0 ? `电制 ${Math.abs(s.traction)}级` : '零位';
   elements.directionBadge.querySelector('span').textContent = s.direction === 'F' ? '前进位' : s.direction === 'R' ? '后退位' : '中立位';
   elements.sideRelease.classList.toggle('active', s.sideRelease);
   elements.sideRelease.querySelector('span').textContent = s.sideRelease ? '已单缓' : '未动作';
   $('#phase-name').textContent = s.phase?.label || '考评区段';
   const levelText = { normal: '监控正常', warning: 'LKJ报警', unload: 'LKJ卸载', service: 'LKJ常用制动', emergency: 'LKJ紧急制动' }[s.lkjLevel];
   $('#status-message').textContent = `${levelText} · 距进站信号 ${Math.max(0, scenario.entryDistance - s.distance).toFixed(0)} m`;
+  renderCabLkj(s, scenario);
   const progress = assessment.progress(s);
   $('#progress-count').textContent = `${progress.done}/${progress.total}`;
   renderProgress(progress);
@@ -262,6 +269,17 @@ function render() {
   if (lkj.open) lkj.render();
   if (s.lkjLevel !== lastAlertLevel && s.lkjLevel !== 'normal') alertTone(s.lkjLevel);
   lastAlertLevel = s.lkjLevel;
+}
+
+function renderCabLkj(s, scenario) {
+  if (!elements.cabLkj) return;
+  const remaining = Math.max(0, scenario.entryDistance - s.distance);
+  const aspect = { green: '绿灯', 'green-yellow': '绿黄', yellow: '黄灯', 'double-yellow': '双黄', red: '红灯' }[s.signal.aspect] || '未知';
+  elements.cabLkj.querySelector('b').textContent = s.speed.toFixed(0);
+  elements.cabLkj.querySelector('strong').textContent = s.lkjLimit.toFixed(0);
+  elements.cabLkj.querySelector('.cab-lkj-meta span').textContent = aspect;
+  elements.cabLkj.querySelector('.cab-lkj-meta em').textContent = `${remaining.toFixed(0)}m`;
+  elements.cabLkj.dataset.level = s.lkjLevel;
 }
 
 function renderProgress(progress) {
@@ -272,9 +290,10 @@ function renderProgress(progress) {
 }
 
 function renderData(s) {
+  const grade = routeScene?.getPathGrade(s.distance) || 0;
   const rows = [
     ['速度', `${s.speed.toFixed(1)} km/h`], ['LKJ限速', `${s.lkjLimit.toFixed(0)} km/h`], ['运行距离', `${s.distance.toFixed(0)} m`], ['目标距离', `${Math.max(0, simulation.scenario.entryDistance - s.distance).toFixed(0)} m`],
-    ['列车管', `${s.trainPipe.toFixed(0)} kPa`], ['制动缸', `${s.brakeCylinder.toFixed(0)} kPa`], ['牵引手柄', `${s.traction} 级`], ['自阀', brakeNames[s.autoBrake]],
+    ['列车管', `${s.trainPipe.toFixed(0)} kPa`], ['制动缸', `${s.brakeCylinder.toFixed(0)} kPa`], ['线路坡度', `${grade >= 0 ? '+' : ''}${grade.toFixed(1)} ‰`], ['牵引手柄', `${s.traction} 级`], ['自阀', brakeNames[s.autoBrake]],
   ];
   $('#run-data').innerHTML = rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${value}</dd></div>`).join('');
 }

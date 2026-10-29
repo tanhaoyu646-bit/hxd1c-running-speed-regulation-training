@@ -9,6 +9,8 @@
 
 途中调速环境采用项目内独立的线路窗口和地形资源。轨道中心线来自原 `NEIYI` 线路的 `5635——本务.pat + NEIYI.tdb`；场景来自同线路27个世界块的完整导出。`neiyi-speed-regulation-terrain.json` 的10块高程全部由 Open Rails 从原 `.t` 与 `_y.raw` 文件解析，不含推算瓦片；发布后不需要访问任何兄弟项目。
 
+驾驶本务线不直接采用导出后存在竖向姿态偏差的分节 `TrackObj`，而是依据同一 `TrackDB` 中心线连续重建。原桥梁、隧道、邻线、建筑、树木和接触网仍来自上述27个世界块，没有改用其他线路或兄弟项目环境。
+
 - Web轨道中心线文件 SHA-256：`FDFDC3EF9E25CB0190A1E7795C189D9FE4D727CA87EE63CDC843920A11FA4236`。
 - 原 `5635——本务.pat` SHA-256：`66EFED0F9B037EAFA247D266052C202C46AD1C9C9FD5F66E0784C66D0E0A2B38`。
 - 原 `NEIYI.tdb` SHA-256：`3AA06D4F52300E74EB8D7E87D89DC189016B6EC9D236047C15FB293902D05457`。
