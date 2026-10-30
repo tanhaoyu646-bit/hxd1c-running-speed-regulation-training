@@ -1874,7 +1874,10 @@ export class MstsRouteScene {
       rearLeft: THREE.MathUtils.degToRad(165),
       rearRight: THREE.MathUtils.degToRad(-165),
     };
-    const pitchOffsets = { front: -0.035, left: -0.025, right: -0.025, rearLeft: -0.03, rearRight: -0.03 };
+    // 与同机座的途中瞭望、坡道操纵和站内停车项目保持相同的驾驶员视线基准。
+    // 前向视角必须明显下俯，才能让轨道和近端接触网落在挡风玻璃可视区内；
+    // 线路坡度只作为该基准上的小幅增量，不能把画面重新抬到天空。
+    const pitchOffsets = { front: -0.22, left: -0.035, right: -0.035, rearLeft: -0.04, rearRight: -0.04 };
     const lateralOffsets = { front: 0, left: -0.7, right: 0.7, rearLeft: -3.2, rearRight: 3.2 };
     const longitudinalOffsets = { front: 0, left: 0, right: 0, rearLeft: -1.8, rearRight: -1.8 };
     const right = new THREE.Vector3(this.forward.z, 0, -this.forward.x);

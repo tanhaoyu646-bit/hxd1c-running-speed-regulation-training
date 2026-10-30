@@ -99,7 +99,7 @@ test('驾驶中心线不产生超出原TrackDB节点的高程过冲', async () =
   assert.ok(normalizedMaximumGrade <= 35.8, `平滑后最大坡度 ${normalizedMaximumGrade.toFixed(2)}‰`);
 });
 
-test('驾驶台原位LKJ显示实时速度且相机跟随轨道坡度', async () => {
+test('驾驶台原位LKJ显示实时速度且前向视角沿轨道保持驾驶员下俯基准', async () => {
   const appSource = await readFile(new URL('../scripts/speedRegulationApp.js', import.meta.url), 'utf8');
   const routeSource = await readFile(new URL('../scripts/mstsRouteScene.js', import.meta.url), 'utf8');
   const css = await readFile(new URL('../styles/speed-regulation.css', import.meta.url), 'utf8');
@@ -107,6 +107,8 @@ test('驾驶台原位LKJ显示实时速度且相机跟随轨道坡度', async ()
   assert.match(appSource, /querySelector\('b'\)\.textContent = s\.speed\.toFixed\(0\)/);
   assert.match(css, /\.cab-lkj-live/);
   assert.match(routeSource, /const trackPitch = Math\.asin/);
+  assert.match(routeSource, /const pitchOffsets = \{ front: -0\.22,/);
+  assert.match(routeSource, /trackPitch \+ \(pitchOffsets\[this\.view\]/);
   assert.match(routeSource, /getPathGrade\(/);
 });
 
