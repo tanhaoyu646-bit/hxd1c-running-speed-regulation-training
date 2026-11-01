@@ -1,9 +1,9 @@
 import { CAB, PROJECT_ID, getScenario } from './speedRegulationConfig.js';
-import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261101-bridge-instruments';
-import { SpeedRegulationAssessment } from './speedRegulationAssessment.js';
+import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261101-mobile-cir-lkj-2';
+import { SpeedRegulationAssessment } from './speedRegulationAssessment.js?v=20261101-mobile-cir-lkj-2';
 import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261101-bridge-instruments';
-import { LkjRuntime } from './lkjRuntime.js?v=20261101-bridge-instruments';
-import { CirRuntime } from './cirRuntime.js';
+import { LkjRuntime } from './lkjRuntime.js?v=20261101-mobile-cir-lkj-2';
+import { CirRuntime } from './cirRuntime.js?v=20261101-mobile-cir-lkj-2';
 import {
   clearCandidateDraft,
   createCandidateAttempt,
@@ -299,6 +299,9 @@ function chooseScenario(id) {
   $('#result-modal').classList.remove('open');
   lkj.close();
   cir.close();
+  $('#mobile-operations').classList.remove('open');
+  $('#mobile-operations').setAttribute('aria-hidden', 'true');
+  $('#mobile-operations-toggle').setAttribute('aria-expanded', 'false');
   selectedView = 'front';
   selectView('front');
   simulation.start();
