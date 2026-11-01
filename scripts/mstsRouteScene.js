@@ -404,6 +404,68 @@ export class MstsRouteScene {
     return root;
   }
 
+  buildGradeAlignedBridge(instance, shape) {
+    // MSTS 的桥梁预制件桥面在局部坐标中为水平面；世界实例只给了极小的纵坡。
+    // 当前本务线沿 TrackDB 下坡，因此将每段桥面两端贴合到同一中心线。
+    const beam = shape.groups.find((group) => /cn_bridge_beam/i.test(shape.materials[group.materialIndex]?.texture || ''));
+    if (!beam) return false;
+    const coordinates = beam.positions;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (let index = 2; index < coordinates.length; index += 3) {
+      minZ = Math.min(minZ, coordinates[index]);
+      maxZ = Math.max(maxZ, coordinates[index]);
+    }
+    if (!(maxZ > minZ)) return false;
+    const origin = new THREE.Vector3().fromArray(instance.position);
+    const rotation = new THREE.Quaternion().fromArray(instance.quaternion).normalize();
+    const inverseRotation = rotation.clone().invert();
+    const deckCorrection = (localZ) => {
+      const world = new THREE.Vector3(0, 0, localZ).applyQuaternion(rotation).add(origin);
+      const projected = this.projectPointToPath(world.toArray());
+      return projected ? projected.point.y - world.y : 0;
+    };
+    const correctionAtMin = deckCorrection(minZ);
+    const correctionAtMax = deckCorrection(maxZ);
+    const root = new THREE.Group();
+    root.name = `GRADE_ALIGNED_BRIDGE_${instance.uid}`;
+    root.position.copy(origin);
+    root.quaternion.copy(rotation);
+    for (const group of shape.groups) {
+      if (!group.positions?.length) continue;
+      const material = shape.materials[group.materialIndex];
+      const isPier = /cn_pier/i.test(material?.texture || '');
+      const positions = [...group.positions];
+      let minY = Infinity;
+      let maxY = -Infinity;
+      if (isPier) for (let index = 1; index < positions.length; index += 3) {
+        minY = Math.min(minY, positions[index]);
+        maxY = Math.max(maxY, positions[index]);
+      }
+      for (let index = 0; index < positions.length; index += 3) {
+        const local = new THREE.Vector3(positions[index], positions[index + 1], positions[index + 2]);
+        const ratio = THREE.MathUtils.clamp((local.z - minZ) / (maxZ - minZ), 0, 1);
+        let correction = THREE.MathUtils.lerp(correctionAtMin, correctionAtMax, ratio);
+        if (isPier) correction *= THREE.MathUtils.clamp((local.y - minY) / Math.max(1, maxY - minY), 0, 1);
+        const world = local.applyQuaternion(rotation).add(origin);
+        world.y += correction;
+        world.sub(origin).applyQuaternion(inverseRotation);
+        positions[index] = world.x;
+        positions[index + 1] = world.y;
+        positions[index + 2] = world.z;
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      if (group.uvs?.length === positions.length / 3 * 2) geometry.setAttribute('uv', new THREE.Float32BufferAttribute(group.uvs, 2));
+      geometry.computeVertexNormals();
+      const mesh = new THREE.Mesh(geometry, this.getMaterial(material));
+      mesh.frustumCulled = false;
+      root.add(mesh);
+    }
+    this.routeRoot.add(root);
+    return true;
+  }
+
   buildRoute(data) {
     const instancesByShape = new Map();
     const corridorStart = this.routeWindow ? Math.max(0, Number(this.routeWindow.start) || 0) : 0;
@@ -475,6 +537,10 @@ export class MstsRouteScene {
       // 区分大小写。原区段有82个实例使用了 Strt/strt 混合写法，其中包含
       // 桥面上的 A1t 主线轨道；统一键名后才能完整恢复这些原轨道构件。
       const shapeKey = String(instance.shape || '').toLowerCase();
+      if (this.isSpeedRegulation && /^cn_bridge_\d+mstrt\.s$/.test(shapeKey)) {
+        const bridgeShape = Object.values(data.shapes).find((shape) => String(shape.fileName || '').toLowerCase() === shapeKey);
+        if (bridgeShape && this.buildGradeAlignedBridge(instance, bridgeShape)) return;
+      }
       if (!instancesByShape.has(shapeKey)) instancesByShape.set(shapeKey, []);
       instancesByShape.get(shapeKey).push(instance);
     });

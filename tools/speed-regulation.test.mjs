@@ -66,6 +66,30 @@ test('两个技能配置、里程和状态互相独立', () => {
   assert.ok(lkjControlLimit(SCENARIOS.oneStage, 1900) < lkjControlLimit(SCENARIOS.oneStage, 200));
 });
 
+test('坡度进入动力学，网压电流与风压指针使用实时状态', () => {
+  const downhill = new SpeedRegulationSimulation('oneStage');
+  const uphill = new SpeedRegulationSimulation('oneStage');
+  for (const simulation of [downhill, uphill]) {
+    simulation.state.speed = 60;
+    simulation.command('traction', 0);
+    simulation.start();
+  }
+  downhill.state.grade = -20;
+  uphill.state.grade = 20;
+  for (let index = 0; index < 100; index += 1) { downhill.tick(.05); uphill.tick(.05); }
+  assert.ok(downhill.state.speed > uphill.state.speed + 5);
+  downhill.command('traction', 3);
+  for (let index = 0; index < 40; index += 1) downhill.tick(.05);
+  assert.ok(downhill.state.tractionCurrent > 100);
+  assert.ok(downhill.state.netVoltage < 2500);
+  downhill.command('traction', 0);
+  downhill.command('auto-brake', 2);
+  for (let index = 0; index < 100; index += 1) downhill.tick(.05);
+  assert.ok(downhill.state.trainPipe < 600);
+  assert.ok(downhill.state.brakeCylinder > 0);
+  assert.ok(downhill.state.mainReservoir < 900);
+});
+
 test('一段制动标准操作可在目标速度范围通过进站信号机', () => {
   const simulation = runOneStage();
   const result = new SpeedRegulationAssessment(simulation).result();

@@ -99,13 +99,17 @@ test('驾驶中心线不产生超出原TrackDB节点的高程过冲', async () =
   assert.ok(normalizedMaximumGrade <= 35.8, `平滑后最大坡度 ${normalizedMaximumGrade.toFixed(2)}‰`);
 });
 
-test('驾驶台原位LKJ显示实时速度且前向视角沿轨道保持驾驶员下俯基准', async () => {
+test('原游戏仪表原位显示速度、风压、网压、电流和机车信号，前向视角保持驾驶员下俯基准', async () => {
   const appSource = await readFile(new URL('../scripts/speedRegulationApp.js', import.meta.url), 'utf8');
   const routeSource = await readFile(new URL('../scripts/mstsRouteScene.js', import.meta.url), 'utf8');
   const css = await readFile(new URL('../styles/speed-regulation.css', import.meta.url), 'utf8');
-  assert.match(appSource, /className = 'cab-lkj-live'/);
-  assert.match(appSource, /querySelector\('b'\)\.textContent = s\.speed\.toFixed\(0\)/);
-  assert.match(css, /\.cab-lkj-live/);
+  assert.match(appSource, /makeDigital\(229, 251, 20, 7, 'speed'\)/);
+  assert.match(appSource, /speedDigital\.textContent =/);
+  assert.match(appSource, /makeNeedle\('HXD1C_SDZ\.png'/);
+  assert.match(appSource, /makeNeedle\('HXD1C_red\.png'/);
+  assert.match(appSource, /makeBar\(351, 266, 4, 30/);
+  assert.match(appSource, /makeSprite\('locomotive-signal'/);
+  assert.match(css, /\.cab-needle/);
   assert.match(routeSource, /const trackPitch = Math\.asin/);
   assert.match(routeSource, /const pitchOffsets = \{ front: -0\.22,/);
   assert.match(routeSource, /trackPitch \+ \(pitchOffsets\[this\.view\]/);

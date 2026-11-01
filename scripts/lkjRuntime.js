@@ -70,6 +70,7 @@ export class LkjRuntime {
     if (id === 'setting') { this.page = 'parameters'; this.render(); return; }
     if (id === 'dump') { this.page = 'records'; this.render(); return; }
     if (id === 'left') { this.page = this.page === 'main' ? 'main' : 'menu'; this.render(); return; }
+    if (id === 'right' && this.page === 'menu') { this.page = MENU[this.menuIndex][0] === 'return' ? 'main' : MENU[this.menuIndex][0]; this.render(); return; }
     if (id === 'up' && this.page === 'menu') { this.menuIndex = (this.menuIndex - 1 + MENU.length) % MENU.length; this.render(); return; }
     if (id === 'down' && this.page === 'menu') { this.menuIndex = (this.menuIndex + 1) % MENU.length; this.render(); return; }
     if (id === 'confirm' && this.page === 'menu') {
@@ -78,9 +79,29 @@ export class LkjRuntime {
       this.render();
       return;
     }
+    if (id.startsWith('digit-') && this.page === 'menu') {
+      const index = Number(id.slice(6)) - 1;
+      if (index >= 0 && index < MENU.length) {
+        this.menuIndex = index;
+        this.page = MENU[index][0] === 'return' ? 'main' : MENU[index][0];
+        this.render();
+        return;
+      }
+    }
+    if ((id === 'up' || id === 'down') && this.page === 'records') {
+      this.recordOffset = Math.max(0, Math.min(this.simulation.state.events.length - 1, (this.recordOffset || 0) + (id === 'up' ? 1 : -1)));
+      this.render();
+      return;
+    }
+    if (id === 'confirm' && this.page !== 'main') { this.page = 'main'; this.render(); return; }
+    if (id === 'digit-3') { this.page = 'current'; this.render(); return; }
+    if (id === 'digit-4') { this.page = 'all'; this.render(); return; }
+    if (id === 'digit-5') { this.page = 'condition'; this.render(); return; }
+    if (id === 'digit-0') { this.page = 'equipment'; this.render(); return; }
+    if (id === 'digit-8') { this.flash(`当前里程 ${fmt(this.simulation.state.distance / 1000, 3)} km`); return; }
     if (id === 'digit-7') { this.flash('开车键有效：运行监控中'); return; }
     if (id === 'unlock') { this.flash('当前无解锁条件'); return; }
-    if (id.startsWith('digit-')) { this.flash(`数字键 ${id.slice(6)}`); return; }
+    if (id.startsWith('digit-')) { this.flash('运行监控中，当前按键无需操作'); return; }
     this.flash('该键在当前页面无对应操作');
   }
 
@@ -99,7 +120,7 @@ export class LkjRuntime {
     } else if (this.page === 'condition') {
       this.screen.innerHTML = this.detailPage('工况显示', [
         ['速度', `${fmt(s.speed, 1)} km/h`], ['牵引手柄', `${s.traction} 级`], ['自阀', `${s.autoBrake} 位`],
-        ['列车管', `${fmt(s.trainPipe)} kPa`], ['制动缸', `${fmt(s.brakeCylinder)} kPa`], ['运行里程', `${fmt(s.distance)} m`],
+        ['列车管', `${fmt(s.trainPipe)} kPa`], ['制动缸', `${fmt(s.brakeCylinder)} kPa`], ['网压', `${fmt(s.netVoltage / 100, 1)} kV`], ['牵引电流', `${fmt(s.tractionCurrent)} A`], ['运行里程', `${fmt(s.distance)} m`],
       ]);
     } else if (this.page === 'equipment') {
       this.screen.innerHTML = this.detailPage('设备状态', [
@@ -114,8 +135,8 @@ export class LkjRuntime {
         ['前方目标', scenario.entrySignalName], ['目标距离', `${fmt(Math.max(0, scenario.entryDistance - s.distance))} m`], ['目标速度', `≤ ${scenario.maximumEntrySpeed} km/h`], ['信号', this.aspectLabel(s.signal.aspect)], ['线路限速', '120 km/h'], ['临时限速', '无'],
       ]);
     } else if (this.page === 'records') {
-      const records = s.events.slice(-6).reverse().map((event) => `<li><span>${this.eventLabel(event.type)}</span><b>${fmt(event.elapsed)}s</b><em>${fmt(event.speed)} km/h</em></li>`).join('') || '<li>暂无记录</li>';
-      this.screen.innerHTML = `<div class="lkj-page records"><header>运行记录</header><ul>${records}</ul><footer>←返回　转储键刷新</footer></div>`;
+      const records = s.events.slice(0, Math.max(0, s.events.length - (this.recordOffset || 0))).slice(-6).reverse().map((event) => `<li><span>${this.eventLabel(event.type)}</span><b>${fmt(event.elapsed)}s</b><em>${fmt(event.speed)} km/h</em></li>`).join('') || '<li>暂无记录</li>';
+      this.screen.innerHTML = `<div class="lkj-page records"><header>运行记录</header><ul>${records}</ul><footer>↑↓翻阅　←返回　转储键刷新</footer></div>`;
     } else {
       this.screen.innerHTML = this.mainPage(s, scenario);
     }

@@ -1,8 +1,8 @@
 import { CAB, PROJECT_ID, getScenario } from './speedRegulationConfig.js';
-import { SpeedRegulationSimulation } from './speedRegulationSimulation.js';
+import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261101-bridge-instruments';
 import { SpeedRegulationAssessment } from './speedRegulationAssessment.js';
-import { SpeedRegulationScene } from './speedRegulationScene.js';
-import { LkjRuntime } from './lkjRuntime.js';
+import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261101-bridge-instruments';
+import { LkjRuntime } from './lkjRuntime.js?v=20261101-bridge-instruments';
 import {
   clearCandidateDraft,
   createCandidateAttempt,
@@ -30,6 +30,11 @@ let audioContext = null;
 let lastAlertLevel = 'normal';
 let candidateProfile = null;
 let candidateAttempt = null;
+const hornAudio = new Audio('./assets/audio/HXD1C-horn.wav');
+hornAudio.preload = 'auto';
+hornAudio.loop = true;
+let hornPointerId = null;
+let cirPanel = null;
 const overlay = $('#cab-overlay');
 const elements = {};
 
@@ -136,6 +141,40 @@ function makePhysical(label, x, y, width, height, handler, className = '') {
   return element;
 }
 
+function makeNeedle(image, x, y, width, height, pivot, start, end) {
+  const needle = document.createElement('img');
+  needle.className = 'cab-needle';
+  needle.src = `./assets/archive-cabview/${image}`;
+  needle.alt = '';
+  needle.setAttribute('aria-hidden', 'true');
+  needle.dataset.start = start;
+  needle.dataset.end = end;
+  Object.assign(needle.style, { left: pct(x, CAB.width), top: pct(y, CAB.height), width: pct(width, CAB.width), height: pct(height, CAB.height), transformOrigin: `50% ${pivot / height * 100}%` });
+  overlay.append(needle);
+  return needle;
+}
+
+function setNeedle(needle, value, maximum) {
+  const ratio = clamp(Number(value || 0) / maximum, 0, 1);
+  needle.style.transform = `rotate(${Number(needle.dataset.start) + (Number(needle.dataset.end) - Number(needle.dataset.start)) * ratio}deg)`;
+}
+
+function makeBar(x, y, width, height, color) {
+  const bar = document.createElement('div');
+  bar.className = 'cab-gauge-bar';
+  Object.assign(bar.style, { left: pct(x, CAB.width), top: pct(y, CAB.height), width: pct(width, CAB.width), height: pct(height, CAB.height), backgroundColor: color });
+  overlay.append(bar);
+  return bar;
+}
+
+function makeDigital(x, y, width, height, className = '') {
+  const digital = document.createElement('div');
+  digital.className = `cab-digital ${className}`;
+  Object.assign(digital.style, { left: pct(x, CAB.width), top: pct(y, CAB.height), width: pct(width, CAB.width), height: pct(height, CAB.height) });
+  overlay.append(digital);
+  return digital;
+}
+
 function frame(element, index, columns, rows) {
   const column = index % columns;
   const row = Math.floor(index / columns);
@@ -157,13 +196,36 @@ function createCabControls() {
   elements.sideRelease = makeBadge('side-release', '单缓', 113, 404, 68);
   elements.sideRelease.classList.add('side-release-control');
   elements.sideRelease.addEventListener('click', () => simulation.command('side-release', !simulation.state.sideRelease));
-  elements.cabLkj = document.createElement('div');
-  elements.cabLkj.className = 'cab-lkj-live';
-  elements.cabLkj.setAttribute('aria-label', '驾驶台LKJ实时显示');
-  elements.cabLkj.innerHTML = '<div class="cab-lkj-speed"><small>速度</small><b>0</b></div><div class="cab-lkj-limit"><small>限速</small><strong>0</strong></div><div class="cab-lkj-meta"><span>绿灯</span><em>0m</em></div>';
-  Object.assign(elements.cabLkj.style, { left: pct(221, CAB.width), top: pct(252, CAB.height), width: pct(76, CAB.width), height: pct(52, CAB.height) });
-  overlay.append(elements.cabLkj);
   makePhysical('放大LKJ监控装置', 210, 226, 101, 94, () => lkj.show(), 'lkj-hotspot');
+  elements.speedDigital = makeDigital(229, 251, 20, 7, 'speed');
+  elements.limitDigital = makeDigital(244, 251, 20, 7, 'limit');
+  elements.clockDigital = makeDigital(230, 268, 45, 10, 'clock');
+  elements.speedNeedle = makeNeedle('HXD1C_SDZ.png', 493, 277, 3, 18, 2, 68, 300);
+  elements.mainNeedle = makeNeedle('HXD1C_red.png', 154, 253, 7, 21, 14, 230, 100);
+  elements.pipeNeedle = makeNeedle('HXD1C_black.png', 154, 253, 7, 21, 14, 230, 130);
+  elements.eqNeedle = makeNeedle('HXD1C_black.png', 162, 295, 7, 21, 14, 224, 136);
+  elements.cylNeedle = makeNeedle('HXD1C_red.png', 162, 295, 7, 21, 14, 230, 130);
+  elements.mainNeedle2 = makeNeedle('HXD1C_PPW.png', 75, 299, 7, 18, 1, 3, 358);
+  elements.pipeNeedle2 = makeNeedle('HXD1C_PPR.png', 75, 299, 7, 18, 1, 3, 336);
+  elements.eqNeedle2 = makeNeedle('HXD1C_PPW.png', 36, 312, 7, 18, 1, 3, 336);
+  elements.cylNeedle2 = makeNeedle('HXD1C_PPR.png', 36, 312, 7, 18, 1, 3, 300);
+  elements.voltageBar = makeBar(351, 266, 4, 30, '#56e9aa');
+  elements.currentBars = [362, 370, 381, 388].map((x) => makeBar(x, 266, 4, 30, '#66e9e8'));
+  elements.signal = makeSprite('locomotive-signal', 'HXD1C_jx.png', 540, 0, 100, 162, 4, 2, '机车信号');
+  elements.pantograph = makeSprite('pantograph-state', 'HXD1C_DG.png', 410, 295, 7, 8, 1, 2, '受电弓状态');
+  makePhysical('警惕复位', 386, 312, 32, 32, () => simulation.command('lkj-ack'), 'reset-hotspot');
+  makePhysical('查看机车信号', 540, 0, 100, 162, () => lkj.show(), 'signal-hotspot');
+  makePhysical('打开CIR机车综合无线通信设备', 606, 276, 34, 118, () => showCirPanel(), 'cir-hotspot');
+  elements.horn = makePhysical('按住鸣笛', 577, 408, 37, 39, () => {}, 'horn-hotspot');
+  elements.horn.addEventListener('pointerdown', (event) => {
+    event.preventDefault();
+    hornPointerId = event.pointerId;
+    elements.horn.classList.add('pressed');
+    simulation.command('horn-start');
+    hornAudio.currentTime = 0;
+    hornAudio.play().catch(() => {});
+    try { elements.horn.setPointerCapture(event.pointerId); } catch { /* 窗口级释放监听仍然有效。 */ }
+  });
 
   const controls = [
     ['auto', elements.auto, 0, 5, 13],
@@ -189,6 +251,25 @@ function createCabControls() {
   }
   elements.direction.addEventListener('click', () => setDirection());
   elements.directionBadge.addEventListener('click', () => setDirection());
+}
+
+function showCirPanel() {
+  if (!cirPanel) {
+    cirPanel = document.createElement('section');
+    cirPanel.className = 'cir-panel';
+    cirPanel.setAttribute('aria-label', 'CIR通信操作模拟');
+    cirPanel.innerHTML = '<header><b>CIR 通信操作模拟</b><button type="button" data-cir="close" aria-label="关闭CIR">×</button></header><p>区间—车站进站</p><output>待机</output><div><button type="button" data-cir="station">呼叫车站</button><button type="button" data-cir="dispatch">呼叫调度</button><button type="button" data-cir="end">结束通话</button></div>';
+    cirPanel.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-cir]')?.dataset.cir;
+      if (!action) return;
+      if (action === 'close') { cirPanel.classList.remove('open'); return; }
+      const label = { station: '车站', dispatch: '调度', end: '待机' }[action];
+      cirPanel.querySelector('output').textContent = action === 'end' ? label : `模拟呼叫${label}中`;
+      simulation.command('cir-action', action);
+    });
+    $('#stage').append(cirPanel);
+  }
+  cirPanel.classList.add('open');
 }
 
 function setDirection() {
@@ -229,7 +310,8 @@ function chooseScenario(id) {
   $('#skill-name').textContent = scenario.title;
   $('#skill-picker').classList.remove('open');
   $('#result-modal').classList.remove('open');
-  $('#lkj-dock').classList.remove('open');
+  lkj.close();
+  cirPanel?.classList.remove('open');
   selectedView = 'front';
   selectView('front');
   simulation.start();
@@ -241,6 +323,7 @@ function selectView(view) {
   selectedView = view;
   $('#cab-view').src = `./assets/archive-cabview/${views[view]}`;
   overlay.classList.toggle('hidden', view !== 'front');
+  if (view !== 'front') cirPanel?.classList.remove('open');
   document.querySelectorAll('[data-view]').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   routeScene?.setView(view);
 }
@@ -248,7 +331,7 @@ function selectView(view) {
 function render() {
   const s = simulation.state;
   const scenario = simulation.scenario;
-  frame(elements.auto, s.autoBrake, 4, 3);
+  frame(elements.auto, [0, 1, 2, 9, 10, 11][s.autoBrake], 4, 3);
   frame(elements.independent, s.independentBrake, 4, 3);
   frame(elements.traction, tractionFrame(s.traction), 2, 8);
   frame(elements.direction, s.direction === 'R' ? 0 : s.direction === 'N' ? 1 : 2, 3, 1);
@@ -258,10 +341,25 @@ function render() {
   elements.directionBadge.querySelector('span').textContent = s.direction === 'F' ? '前进位' : s.direction === 'R' ? '后退位' : '中立位';
   elements.sideRelease.classList.toggle('active', s.sideRelease);
   elements.sideRelease.querySelector('span').textContent = s.sideRelease ? '已单缓' : '未动作';
+  setNeedle(elements.speedNeedle, s.speed, 158);
+  setNeedle(elements.mainNeedle, s.mainReservoir, 1600);
+  setNeedle(elements.pipeNeedle, s.trainPipe, 1000);
+  setNeedle(elements.eqNeedle, s.equalizingReservoir, 1600);
+  setNeedle(elements.cylNeedle, s.brakeCylinder, 1600);
+  setNeedle(elements.mainNeedle2, s.mainReservoir, 1600);
+  setNeedle(elements.pipeNeedle2, s.trainPipe, 1600);
+  setNeedle(elements.eqNeedle2, s.equalizingReservoir, 1600);
+  setNeedle(elements.cylNeedle2, s.brakeCylinder, 1600);
+  elements.voltageBar.style.transform = `scaleY(${clamp(s.netVoltage / 3800, .02, 1)})`;
+  elements.currentBars.forEach((bar, index) => { bar.style.transform = `scaleY(${clamp((s.tractionCurrent - index * 18) / (index < 2 ? 1000 : 800), .02, 1)})`; });
+  elements.speedDigital.textContent = s.speed < 10 ? s.speed.toFixed(1) : s.speed.toFixed(0);
+  elements.limitDigital.textContent = s.lkjLimit.toFixed(0);
+  elements.clockDigital.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  frame(elements.signal, { green: 7, 'green-yellow': 6, yellow: 5, 'double-yellow': 4, red: 0 }[s.signal.aspect] ?? 0, 4, 2);
+  frame(elements.pantograph, 1, 1, 2);
   $('#phase-name').textContent = s.phase?.label || '考评区段';
   const levelText = { normal: '监控正常', warning: 'LKJ报警', unload: 'LKJ卸载', service: 'LKJ常用制动', emergency: 'LKJ紧急制动' }[s.lkjLevel];
   $('#status-message').textContent = `${levelText} · 距进站信号 ${Math.max(0, scenario.entryDistance - s.distance).toFixed(0)} m`;
-  renderCabLkj(s, scenario);
   const progress = assessment.progress(s);
   $('#progress-count').textContent = `${progress.done}/${progress.total}`;
   renderProgress(progress);
@@ -269,17 +367,6 @@ function render() {
   if (lkj.open) lkj.render();
   if (s.lkjLevel !== lastAlertLevel && s.lkjLevel !== 'normal') alertTone(s.lkjLevel);
   lastAlertLevel = s.lkjLevel;
-}
-
-function renderCabLkj(s, scenario) {
-  if (!elements.cabLkj) return;
-  const remaining = Math.max(0, scenario.entryDistance - s.distance);
-  const aspect = { green: '绿灯', 'green-yellow': '绿黄', yellow: '黄灯', 'double-yellow': '双黄', red: '红灯' }[s.signal.aspect] || '未知';
-  elements.cabLkj.querySelector('b').textContent = s.speed.toFixed(0);
-  elements.cabLkj.querySelector('strong').textContent = s.lkjLimit.toFixed(0);
-  elements.cabLkj.querySelector('.cab-lkj-meta span').textContent = aspect;
-  elements.cabLkj.querySelector('.cab-lkj-meta em').textContent = `${remaining.toFixed(0)}m`;
-  elements.cabLkj.dataset.level = s.lkjLevel;
 }
 
 function renderProgress(progress) {
@@ -293,7 +380,7 @@ function renderData(s) {
   const grade = routeScene?.getPathGrade(s.distance) || 0;
   const rows = [
     ['速度', `${s.speed.toFixed(1)} km/h`], ['LKJ限速', `${s.lkjLimit.toFixed(0)} km/h`], ['运行距离', `${s.distance.toFixed(0)} m`], ['目标距离', `${Math.max(0, simulation.scenario.entryDistance - s.distance).toFixed(0)} m`],
-    ['列车管', `${s.trainPipe.toFixed(0)} kPa`], ['制动缸', `${s.brakeCylinder.toFixed(0)} kPa`], ['线路坡度', `${grade >= 0 ? '+' : ''}${grade.toFixed(1)} ‰`], ['牵引手柄', `${s.traction} 级`], ['自阀', brakeNames[s.autoBrake]],
+    ['总风缸', `${s.mainReservoir.toFixed(0)} kPa`], ['列车管', `${s.trainPipe.toFixed(0)} kPa`], ['制动缸', `${s.brakeCylinder.toFixed(0)} kPa`], ['网压', `${(s.netVoltage / 100).toFixed(1)} kV`], ['牵引电流', `${s.tractionCurrent.toFixed(0)} A`], ['线路坡度', `${grade >= 0 ? '+' : ''}${grade.toFixed(1)} ‰`], ['牵引手柄', `${s.traction} 级`], ['自阀', brakeNames[s.autoBrake]],
   ];
   $('#run-data').innerHTML = rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${value}</dd></div>`).join('');
 }
@@ -340,6 +427,7 @@ function togglePanel(panel) {
 function animationFrame(now) {
   const dt = Math.min(.08, (now - lastFrame) / 1000);
   lastFrame = now;
+  simulation.state.grade = routeScene?.getPathGrade(simulation.state.distance) || 0;
   simulation.tick(dt);
   if (routeScene) {
     routeScene.update(simulation.state.distance, simulation.state.speed, selectedView);
@@ -362,8 +450,18 @@ $('#retry').addEventListener('click', () => chooseScenario(simulation.state.scen
 $('#choose-skill').addEventListener('click', () => { $('#result-modal').classList.remove('open'); $('#skill-picker').classList.add('open'); });
 $('#change-candidate').addEventListener('click', () => { clearCandidateDraft(); location.reload(); });
 window.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') { document.querySelectorAll('.side-panel').forEach((panel) => panel.classList.remove('open')); $('#view-menu').classList.remove('open'); lkj.close(); }
+  if (event.key === 'Escape') { document.querySelectorAll('.side-panel').forEach((panel) => panel.classList.remove('open')); $('#view-menu').classList.remove('open'); cirPanel?.classList.remove('open'); lkj.close(); }
 });
+function stopHorn(event) {
+  if (hornPointerId === null || (event?.pointerId != null && event.pointerId !== hornPointerId)) return;
+  hornPointerId = null;
+  hornAudio.pause();
+  hornAudio.currentTime = 0;
+  elements.horn?.classList.remove('pressed');
+  simulation.command('horn-stop');
+}
+window.addEventListener('pointerup', stopHorn);
+window.addEventListener('pointercancel', stopHorn);
 
 window.__speedRegulation = { get simulation() { return simulation; }, get assessment() { return assessment; }, chooseScenario };
 preloadRouteScene();

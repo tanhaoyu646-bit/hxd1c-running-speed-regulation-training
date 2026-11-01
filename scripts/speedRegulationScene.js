@@ -1,5 +1,5 @@
 import * as THREE from '../lib/three/three.module.js';
-import { MstsRouteScene } from './mstsRouteScene.js';
+import { MstsRouteScene } from './mstsRouteScene.js?v=20261101-bridge-instruments';
 
 const ASPECT_COLORS = Object.freeze({
   green: ['#1cff65'],
