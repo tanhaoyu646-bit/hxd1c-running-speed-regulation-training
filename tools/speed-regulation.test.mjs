@@ -90,6 +90,38 @@ test('坡度进入动力学，网压电流与风压指针使用实时状态', ()
   assert.ok(downhill.state.mainReservoir < 900);
 });
 
+test('牵引级位通过牵引力与电流改变加速度，电制动降低速度', () => {
+  const outcomes = [-4, 0, 1, 2, 4, 7].map((level) => {
+    const simulation = new SpeedRegulationSimulation('oneStage');
+    simulation.state.speed = 60;
+    simulation.state.grade = 0;
+    simulation.start();
+    simulation.command('traction', level);
+    for (let index = 0; index < 400; index += 1) simulation.tick(.05);
+    return { level, speed: simulation.state.speed, current: simulation.state.tractionCurrent };
+  });
+  for (let index = 1; index < outcomes.length; index += 1) {
+    assert.ok(outcomes[index].speed > outcomes[index - 1].speed, JSON.stringify(outcomes));
+  }
+  assert.ok(outcomes.at(-1).current > outcomes[2].current);
+});
+
+test('考评进度只记录按顺序完成的操作', () => {
+  const simulation = new SpeedRegulationSimulation('oneStage');
+  const assessment = new SpeedRegulationAssessment(simulation);
+  simulation.start();
+  simulation.command('callout');
+  simulation.command('traction', 0);
+  assert.equal(assessment.progress().done, 0);
+  simulation.command('lkj-open');
+  assert.equal(assessment.progress().done, 1);
+  simulation.command('callout');
+  simulation.command('traction', 0);
+  simulation.command('side-release', true);
+  simulation.command('auto-brake', 1);
+  assert.equal(assessment.progress().done, 5);
+});
+
 test('一段制动标准操作可在目标速度范围通过进站信号机', () => {
   const simulation = runOneStage();
   const result = new SpeedRegulationAssessment(simulation).result();

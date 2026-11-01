@@ -140,24 +140,21 @@ export class LkjRuntime {
     } else {
       this.screen.innerHTML = this.mainPage(s, scenario);
     }
+    this.screen.insertAdjacentHTML('afterbegin', `<div class="lkj-native-aspect ${s.signal.aspect}"></div><b class="lkj-native-speed">${fmt(s.speed)}</b><b class="lkj-native-limit">${fmt(s.lkjLimit)}</b><b class="lkj-native-distance">${fmt(Math.max(0, scenario.entryDistance - s.distance))}</b><b class="lkj-native-station">K226+091</b><b class="lkj-native-km">${fmt(s.distance / 1000, 3)}</b><time class="lkj-native-time">${new Date().toLocaleTimeString('zh-CN', { hour12: false })}</time>`);
     if (this.notice) this.screen.insertAdjacentHTML('beforeend', `<div class="lkj-notice">${this.notice}</div>`);
   }
 
   mainPage(s, scenario) {
-    const width = 620;
-    const height = 148;
-    const samples = s.samples.slice(-100);
-    const maxDistance = Math.max(1, ...samples.map((sample) => sample.distance));
-    const startDistance = Math.max(0, maxDistance - 2400);
-    const span = Math.max(800, maxDistance - startDistance);
-    const speedPoints = samples.map((sample) => `${((sample.distance - startDistance) / span) * width},${height - sample.speed / 140 * height}`).join(' ');
-    const limitPoints = samples.map((sample) => `${((sample.distance - startDistance) / span) * width},${height - sample.limit / 140 * height}`).join(' ');
     const levelLabels = { normal: '监控', warning: '报警', unload: '卸载', service: '常用制动', emergency: '紧急制动' };
-    return `<div class="lkj-main level-${s.lkjLevel}">
-      <div class="lkj-top"><b>${fmt(s.speed)}</b><span>km/h</span><strong>${fmt(s.lkjLimit)}</strong><small>限速</small><em>${levelLabels[s.lkjLevel]}</em></div>
-      <div class="lkj-meta"><span>${this.aspectLabel(s.signal.aspect)}</span><span>${scenario.entrySignalName}</span><span>距目标 ${fmt(Math.max(0, scenario.entryDistance - s.distance))}m</span><span>管压 ${fmt(s.trainPipe)}kPa</span></div>
-      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="速度曲线"><g class="grid"><path d="M0 42H620M0 84H620M0 126H620"/></g><polyline class="limit" points="${limitPoints}"/><polyline class="speed" points="${speedPoints}"/></svg>
-      <div class="lkj-bottom"><span>${scenario.routeLabel}</span><span>${fmt(s.distance / 1000, 2)} km</span><span>${new Date().toLocaleTimeString('zh-CN', { hour12: false })}</span></div>
+    const speedPoints = s.samples.slice(-250).map((sample) => {
+      const x = 191 + (sample.distance - s.distance) * 545 / 2400;
+      return x >= 64 && x <= 736 ? `${x.toFixed(1)},${(390 - Math.min(140, sample.speed) / 140 * 330).toFixed(1)}` : null;
+    }).filter(Boolean).join(' ');
+    const limitY = 390 - Math.min(140, s.lkjLimit) / 140 * 330;
+    return `<div class="lkj-native-monitor level-${s.lkjLevel}">
+      <svg viewBox="0 0 800 615" preserveAspectRatio="none" aria-label="LKJ运行监控曲线"><polyline class="lkj-native-limit-line" points="64,${limitY} 736,${limitY}"/><line class="lkj-native-position-line" x1="191" y1="60" x2="191" y2="390"/><polyline class="lkj-native-speed-line" points="${speedPoints}"/></svg>
+      <aside class="lkj-native-equipment"><b>原边电流 <em>${fmt(s.tractionCurrent)} A</em></b><b>列车管压力 <em>${fmt(s.trainPipe)} kPa</em></b><b>制动缸压力 <em>${fmt(s.brakeCylinder)} kPa</em></b><b>均衡风缸 <em>${fmt(s.equalizingReservoir)} kPa</em></b><b>网压 <em>${fmt(s.netVoltage / 100, 1)} kV</em></b><b>工况 <em>${s.traction > 0 ? `牵引${s.traction}级` : s.traction < 0 ? `电制${-s.traction}级` : '惰行'}</em></b><b>通道速度 <em>${fmt(s.speed)} km/h</em></b></aside>
+      <div class="lkj-native-status">${levelLabels[s.lkjLevel]} · ${this.aspectLabel(s.signal.aspect)}</div>
     </div>`;
   }
 

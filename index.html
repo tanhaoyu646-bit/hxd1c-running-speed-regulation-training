@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#06131d">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23061925'/%3E%3Cpath d='M13 39h38M18 39V20h28v19M24 48l5-9m11 9-5-9' stroke='%2358d7ff' stroke-width='5' fill='none'/%3E%3Ccircle cx='25' cy='29' r='3' fill='%23f0c457'/%3E%3Ccircle cx='39' cy='29' r='3' fill='%23f0c457'/%3E%3C/svg%3E">
   <title>HXD1C 途中调速实操考评</title>
-  <link rel="stylesheet" href="./styles/speed-regulation.css?v=20261101-bridge-instruments">
+  <link rel="stylesheet" href="./styles/speed-regulation.css?v=20261101-cir-lkj-mobile">
 </head>
 <body class="candidate-entry-active">
   <section id="candidate-gate" class="candidate-gate" role="dialog" aria-modal="true" aria-labelledby="candidate-title">
@@ -37,8 +37,17 @@
         <button type="button" id="rules-toggle" class="toolbar-button">考评说明</button>
         <button type="button" id="view-toggle" class="toolbar-button">视角</button>
         <button type="button" id="data-toggle" class="toolbar-button">运行数据</button>
+        <button type="button" id="mobile-operations-toggle" class="toolbar-button mobile-only" aria-expanded="false">操作</button>
         <button type="button" id="fullscreen" class="toolbar-button icon-button" aria-label="全屏">⛶</button>
       </header>
+
+      <section id="mobile-operations" class="mobile-operations" aria-label="手机操作台" aria-hidden="true">
+        <header><b>操作台</b><button type="button" data-mobile-close aria-label="关闭操作台">×</button></header>
+        <div class="mobile-control-row"><span>牵引／电制动 <b data-mobile-traction>牵引 2 级</b></span><button type="button" data-mobile-command="traction-down">−</button><button type="button" data-mobile-command="traction-zero">0</button><button type="button" data-mobile-command="traction-up">＋</button></div>
+        <div class="mobile-control-row"><span>自阀 <b data-mobile-auto>运转位</b></span><button type="button" data-mobile-command="auto-down">−</button><button type="button" data-mobile-command="auto-up">＋</button></div>
+        <div class="mobile-control-row"><span>单阀 <b data-mobile-independent>缓解位</b></span><button type="button" data-mobile-command="independent-down">−</button><button type="button" data-mobile-command="independent-up">＋</button></div>
+        <div class="mobile-device-row"><button type="button" data-mobile-command="side-release">单缓</button><button type="button" data-mobile-command="lkj">LKJ</button><button type="button" data-mobile-command="cir">CIR</button></div>
+      </section>
 
       <nav id="view-menu" class="view-menu" aria-label="驾驶视角">
         <button data-view="front" class="active">前方</button><button data-view="left">左侧</button><button data-view="right">右侧</button><button data-view="rearLeft">左后</button><button data-view="rearRight">右后</button>
@@ -109,6 +118,6 @@
       </section>
     </section>
   </main>
-  <script type="module" src="./scripts/speedRegulationApp.js?v=20261101-bridge-instruments"></script>
+  <script type="module" src="./scripts/speedRegulationApp.js?v=20261101-cir-lkj-mobile"></script>
 </body>
 </html>

@@ -56,3 +56,58 @@ body.candidate-entry-active{overflow:hidden}
 @media(orientation:landscape) and (max-height:620px){.candidate-gate{align-items:start;padding:max(6px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}.candidate-card{width:min(880px,95vw);padding:12px 18px}.candidate-card h1{margin:2px 0 3px;font-size:22px}.candidate-card>p:not(.candidate-error):not(.candidate-load-status){margin-bottom:7px;font-size:10px;line-height:1.45}.candidate-fields input{height:38px}.candidate-error{min-height:15px;margin:3px 0;font-size:9px}.candidate-submit{min-height:38px;margin-top:4px}.candidate-load-status{margin-top:4px;font-size:8px}.candidate-card>small{margin-top:3px;font-size:8px}.result-candidate{margin:3px 0 6px;padding:6px 9px;gap:3px 12px}.result-card h2{font-size:28px}.result-categories{margin:8px 0}.result-actions button{padding:7px 10px;font-size:10px}}
 @media(max-width:620px) and (orientation:portrait){.candidate-gate{align-items:start;padding-top:max(12px,env(safe-area-inset-top))}.candidate-card{padding:20px}.candidate-fields{grid-template-columns:1fr}}
 @media(orientation:portrait) and (max-width:900px){.stage::after{content:"请旋转至横屏进行考评";position:fixed;z-index:200;inset:0;display:grid;place-items:center;background:#06131d;color:#d8f6ff;font-size:20px}}
+
+/* 顺序考评记录沿用过分相项目的编号、当前项和完成项层级。 */
+#progress-list{list-style:none;margin:10px 0 0;padding:0;counter-reset:none}
+#progress-list li{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:9px;min-height:41px;margin:5px 0;padding:6px 9px;border:1px solid #234657;border-radius:7px;background:#0a1b26;color:#85a4b3}
+#progress-list li b{display:grid;place-items:center;width:25px;height:25px;border:1px solid #37657b;border-radius:5px;color:#9fc6d8;font-size:10px}
+#progress-list li span{font-size:12px}
+#progress-list li em{font-style:normal;font-size:10px;color:#7797a5}
+#progress-list li.done{border-color:#2ba16e;background:#0d392b;color:#88f2b8}
+#progress-list li.done b{border-color:#3cc488;background:#156a48;color:#fff}
+#progress-list li.done em{color:#8be3b5}
+#progress-list li.active{border-color:#55bfdf;background:#16445b;color:#fff}
+#progress-list li.active b{border-color:#80dfff;background:#1d7093;color:#fff}
+#progress-list li.active em{color:#a7e8ff}
+
+/* LKJ 使用原程序主界面像素作底图，仅更新运行数值、曲线和设备状态。 */
+.lkj-screen{inset:0;left:0;top:0;right:0;bottom:0;background:transparent;pointer-events:none;font-family:SimSun,"宋体",serif}
+.lkj-keypad{z-index:4;pointer-events:none}.lkj-keypad button{pointer-events:auto;touch-action:manipulation}
+.lkj-native-aspect{position:absolute;z-index:2;left:.6%;top:.5%;width:7.7%;height:8.7%;border-radius:50%;background:#050505}
+.lkj-native-aspect.green{background:#18ea30}.lkj-native-aspect.yellow{background:#ffe900}.lkj-native-aspect.green-yellow{background:linear-gradient(#20e841 50%,#ffe500 50%)}.lkj-native-aspect.double-yellow{background:linear-gradient(90deg,#ffe500 50%,#f5df13 50%)}.lkj-native-aspect.red{background:#f31a19}
+.lkj-native-speed,.lkj-native-limit,.lkj-native-distance,.lkj-native-station,.lkj-native-km,.lkj-native-time{position:absolute;z-index:2;display:grid;place-items:center;margin:0;background:#000;line-height:1;font-weight:500;font-family:"Times New Roman",SimSun,serif}
+.lkj-native-speed{left:17%;top:.3%;width:9.4%;height:8.7%;color:#16f64a;font-size:clamp(12px,1.3vw,26px)}
+.lkj-native-limit{left:33.3%;top:.3%;width:9.4%;height:8.7%;color:#ff1d19;font-size:clamp(12px,1.3vw,26px)}
+.lkj-native-distance{left:50.4%;top:.3%;width:11.7%;height:8.7%;color:#fff000;font-size:clamp(12px,1.3vw,26px)}
+.lkj-native-station{left:67.2%;top:.3%;width:16.1%;height:3.9%;color:#c5c5c5;font-size:clamp(5px,.52vw,10px)}
+.lkj-native-km{left:67.2%;top:4.7%;width:16.1%;height:4.1%;color:#fff000;font-size:clamp(7px,.8vw,15px)}
+.lkj-native-time{left:83.8%;top:4.7%;width:15.8%;height:4.1%;color:#fff;font-size:clamp(6px,.72vw,14px)}
+.lkj-native-monitor,.lkj-native-monitor svg{position:absolute;inset:0;width:100%;height:100%}
+.lkj-native-monitor svg{z-index:1;pointer-events:none}.lkj-native-limit-line{fill:none;stroke:#a81919;stroke-width:2}.lkj-native-position-line{stroke:#1c65a2;stroke-width:1.8}.lkj-native-speed-line{fill:none;stroke:#17e448;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.lkj-native-equipment{position:absolute;z-index:2;left:68.2%;top:10.7%;width:26.5%;padding:.4%;border:1px solid #fff;background:#0717d7;color:#fff;font-size:clamp(4px,.41vw,8px);line-height:1.35}
+.lkj-native-equipment b{display:flex;justify-content:space-between;gap:3px;font-weight:600;white-space:nowrap}.lkj-native-equipment em{font-style:normal}
+.lkj-native-status{position:absolute;z-index:2;left:24%;bottom:21%;padding:.35% .8%;border:1px solid #777;background:#bdbdbd;color:#333;font-size:clamp(6px,.7vw,13px)}
+.lkj-page{z-index:2;left:25%;top:25%;right:25%;bottom:25%;padding:1.5%;border:2px solid #eee;background:#c8c8c8;color:#222;font-family:SimSun,"宋体",serif;font-size:clamp(7px,.8vw,14px)}
+.lkj-page header{margin:-3% -3% 3%;padding:1% 2%;border:0;background:#0b10d8;color:#fff}.lkj-page ol{gap:1%;margin:0;padding:0}.lkj-page li{border:1px solid #999;background:#e8e8e8;padding:1.5%}.lkj-page li.selected{border-color:#9d1914;background:#b6241d;color:#fff}.lkj-page dl{gap:1%;margin:0}.lkj-page dl div{padding:1.5%;border:1px solid #aaa;background:#ddd}.lkj-page dd{color:#222;font-weight:700}.lkj-page footer{color:#444}
+.lkj-notice{z-index:5;left:25%;right:25%;top:42%;background:#bdbdbd;color:#222;font-size:clamp(8px,.8vw,14px)}
+.lkj-close{top:10%;right:.7%;width:5.3%;z-index:6;font-size:clamp(9px,.7vw,13px)}
+
+/* 保留贯通试验和制动机试验所用的 CIR 原模拟器。 */
+.cir-modal{position:fixed;z-index:1000;inset:0;display:none;place-items:center;padding:max(6px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));background:#01070bdf}
+.cir-modal.open{display:grid}.cir-device{width:min(1200px,98vw);height:min(760px,96dvh);overflow:hidden;border:1px solid #59c7ec;border-radius:10px;background:#071923;box-shadow:0 24px 90px #000}
+.cir-device>header{height:48px;display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #326783}.cir-device>header b{font-size:15px}.cir-close{width:38px;height:34px;border:1px solid #a7545d;border-radius:6px;background:#371a21;font-size:24px}
+.cir-layout{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(230px,.8fr);gap:10px;height:calc(100% - 48px);padding:10px;background:#040d14}.cir-frame-wrap{position:relative;min-width:0;min-height:0;overflow:hidden;border:1px solid #2f7fa9;border-radius:8px;background:#000}.cir-frame{position:absolute;left:50%;top:50%;width:918px;height:600px;border:0;background:#000;transform-origin:center;transform:translate(-50%,-50%) scale(var(--cir-scale,1))}.cir-loading{position:absolute;inset:0;display:grid;place-items:center;color:#8ab5c9;font-size:12px}.cir-loading[hidden]{display:none}
+.cir-status{padding:13px;border:1px solid #286480;border-radius:8px;background:#071b28;overflow:auto}.cir-status h3{margin:0 0 9px;font-size:15px}.cir-status dl{margin:0}.cir-status dl div{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #21495e;font-size:12px}.cir-status dt{color:#8fb8ca}.cir-status dd{margin:0;color:#78efae;font-weight:700}.cir-status p{line-height:1.55;color:#b7d8e7;font-size:12px}
+.mobile-only,.mobile-operations{display:none}
+
+@media(max-height:620px) and (orientation:landscape){
+  .stage{width:100vw;height:100dvh;max-width:none;max-height:none}
+  .toolbar{top:env(safe-area-inset-top);right:max(4px,env(safe-area-inset-right));width:auto;max-width:96%;gap:4px}.toolbar-button{min-height:36px;padding:5px 7px;font-size:clamp(9px,1.2vw,13px)}.icon-button{width:36px}
+  .control-position-badge{min-height:28px;padding:2px 4px}.control-position-badge b{font-size:9px}.control-position-badge span{font-size:10px}
+  .side-panel{position:fixed;top:46px;right:max(4px,env(safe-area-inset-right));width:min(380px,65vw);max-height:calc(100dvh - 55px)}
+  .lkj-dock{width:min(92vw,calc(93dvh * 800 / 615));max-height:93dvh}.lkj-native-speed,.lkj-native-limit,.lkj-native-distance{font-size:clamp(18px,5.2vh,24px)}.lkj-native-equipment{font-size:clamp(4px,1.2vh,6px)}.lkj-native-station,.lkj-native-km,.lkj-native-time{font-size:clamp(7px,1.8vh,11px)}
+  .cir-device{width:98vw;height:98dvh}.cir-device>header{height:36px}.cir-layout{height:calc(100% - 36px);grid-template-columns:minmax(0,2.5fr) minmax(170px,.75fr);gap:6px;padding:6px}.cir-status{padding:7px}.cir-status h3{font-size:12px}.cir-status dl div,.cir-status p{font-size:10px;padding:4px 0}
+  .mobile-only{display:block}.mobile-operations.open{position:fixed;z-index:90;left:max(4px,env(safe-area-inset-left));bottom:max(4px,env(safe-area-inset-bottom));display:block;width:min(390px,48vw);max-height:calc(100dvh - 42px);overflow:auto;padding:8px;border:1px solid #61c8ea;border-radius:10px;background:#061924f5;box-shadow:0 10px 35px #000e}
+  .mobile-operations header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}.mobile-operations header b{font-size:12px}.mobile-operations header button{width:29px;height:27px;border:1px solid #97545c;border-radius:5px;background:#3d2028;font-size:20px}
+  .mobile-control-row{display:flex;align-items:center;gap:4px;margin:3px 0}.mobile-control-row span{flex:1;min-width:0;color:#a8ccdc;font-size:9px}.mobile-control-row b{display:block;color:#e8fbff;font-size:11px}.mobile-control-row button,.mobile-device-row button{min-width:33px;min-height:32px;padding:2px 5px;border:1px solid #4daed2;border-radius:5px;background:#124056;font-size:14px}.mobile-device-row{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:6px}.mobile-device-row button{font-size:10px}
+}

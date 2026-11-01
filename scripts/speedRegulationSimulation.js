@@ -26,11 +26,15 @@ export class SpeedRegulationSimulation extends EventTarget {
       sideRelease: false,
       equalizingReservoir: 600,
       trainPipe: 600,
+      tailPipe: 600,
+      pipeRechargeRecorded: false,
       brakeCylinder: 0,
       locomotiveCylinder: 0,
       mainReservoir: 900,
       netVoltage: 2500,
       tractionCurrent: 0,
+      tractionForce: 0,
+      electricBrakeForce: 0,
       grade: 0,
       signal: signalAt(scenario, 0),
       phase: phaseAt(scenario, 0),
@@ -112,6 +116,11 @@ export class SpeedRegulationSimulation extends EventTarget {
     const targetPipe = Math.max(0, 600 - requestedReduction);
     const pipeTau = targetPipe < s.trainPipe ? 6.6 : 14.0;
     s.trainPipe += (targetPipe - s.trainPipe) * (1 - Math.exp(-dt / pipeTau));
+    s.tailPipe += (s.trainPipe - s.tailPipe) * (1 - Math.exp(-dt / 2.2));
+    if (s.autoBrake === 0 && s.trainPipe >= 590 && s.distance > 1800 && s.distance < 3400 && !s.pipeRechargeRecorded) {
+      s.pipeRechargeRecorded = true;
+      this.log('pipe-recharged', { pipe: s.trainPipe });
+    }
     s.equalizingReservoir += (targetPipe - s.equalizingReservoir) * (1 - Math.exp(-dt / 2.8));
     const automaticCylinder = clamp((600 - s.trainPipe) / 170 * 350, 0, 430);
     const independentCylinder = s.independentBrake * 62;
@@ -124,6 +133,8 @@ export class SpeedRegulationSimulation extends EventTarget {
       ? s.traction * 38_000 * clamp(1.18 - s.speed / 210, 0.48, 1.1)
       : 0;
     const electricBrake = s.traction < 0 ? Math.abs(s.traction) * 42_000 : 0;
+    s.tractionForce = tractionForce;
+    s.electricBrakeForce = electricBrake;
     const targetCurrent = clamp((tractionForce || electricBrake) / 310, 0, 900);
     s.tractionCurrent += (targetCurrent - s.tractionCurrent) * (1 - Math.exp(-dt / 0.45));
     s.netVoltage += (clamp(2500 - s.tractionCurrent * 0.12, 2200, 2600) - s.netVoltage) * (1 - Math.exp(-dt / 2));

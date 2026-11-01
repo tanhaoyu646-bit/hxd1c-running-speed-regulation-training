@@ -9,22 +9,25 @@ export class SpeedRegulationAssessment {
   progress(state = this.simulation.state) {
     const events = state.events;
     const scenario = this.simulation.scenario;
-    const checks = [
-      events.some((event) => event.type === 'lkj-open'),
-      events.some((event) => event.type === 'callout'),
-      events.some((event) => event.type === 'traction' && event.value === 0),
-      events.some((event) => event.type === 'side-release' && event.value),
-      events.some((event) => event.type === 'auto-brake' && event.value > 0),
+    const steps = [
+      (event) => event.type === 'lkj-open',
+      (event) => event.type === 'callout',
+      (event) => event.type === 'traction' && event.value === 0,
+      (event) => event.type === 'side-release' && event.value,
+      (event) => event.type === 'auto-brake' && event.value > 0,
     ];
-    if (scenario.id === 'twoStage') {
-      checks.push(
-        events.some((event) => event.type === 'auto-brake' && event.value === 0 && event.speed < 98),
-        state.samples.some((sample) => sample.distance > 1800 && sample.pipe >= 590),
-        events.filter((event) => event.type === 'auto-brake' && event.value > 0).length >= 2,
-      );
+    if (scenario.id === 'twoStage') steps.push(
+      (event) => event.type === 'auto-brake' && event.value === 0 && event.speed < 98,
+      (event) => event.type === 'pipe-recharged',
+      (event) => event.type === 'auto-brake' && event.value > 0 && event.previous?.autoBrake === 0,
+    );
+    steps.push((event) => event.type === 'entry-pass', (event) => event.type === 'attempt-complete');
+    const checks = steps.map(() => false);
+    let current = 0;
+    for (const event of events) {
+      if (current < steps.length && steps[current](event)) checks[current++] = true;
     }
-    checks.push(state.entrySpeed != null, state.completed);
-    return { done: checks.filter(Boolean).length, total: checks.length, checks };
+    return { done: current, total: steps.length, current, checks };
   }
 
   result(state = this.simulation.state) {
@@ -88,16 +91,20 @@ export class SpeedRegulationAssessment {
     let score = categories.reduce((sum, category) => sum + category.score, 0);
     const redline = safetyEvents.length > 0;
     if (redline) score = Math.min(score, 59);
-    const qualified = !redline && score >= 80 && state.entrySpeed <= scenario.maximumEntrySpeed;
+    const progress = this.progress(state);
+    const sequenceComplete = progress.done === progress.total;
+    if (!sequenceComplete) score = Math.min(score, 79);
+    const qualified = !redline && sequenceComplete && score >= 80 && state.entrySpeed <= scenario.maximumEntrySpeed;
     return {
       score,
       qualified,
       redline,
+      sequenceComplete,
       categories,
       entrySpeed: state.entrySpeed,
       duration: state.elapsed,
       distance: state.distance,
-      summary: qualified ? '考评合格' : '考评不合格',
+      summary: qualified ? '考评合格' : !sequenceComplete ? '考评不合格：操作顺序记录未完成' : '考评不合格',
       safetyEvents,
       finalEvent: last(events),
     };
