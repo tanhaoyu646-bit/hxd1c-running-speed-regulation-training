@@ -45,6 +45,21 @@ export class SpeedRegulationScene extends MstsRouteScene {
     this.applyCamera();
   }
 
+  getPathCurve(distance = this.distance, sampleDistance = 24) {
+    if (!this.ready || !this.pathLength) return 0;
+    const routeDistance = this.startOffset + Math.max(0, Number(distance) || 0);
+    const before = this.getPathPosition(Math.max(0, routeDistance - sampleDistance), new THREE.Vector3());
+    const center = this.getPathPosition(Math.min(this.pathLength, routeDistance), new THREE.Vector3());
+    const after = this.getPathPosition(Math.min(this.pathLength, routeDistance + sampleDistance), new THREE.Vector3());
+    const incoming = center.clone().sub(before); incoming.y = 0;
+    const outgoing = after.clone().sub(center); outgoing.y = 0;
+    if (incoming.lengthSq() < .0001 || outgoing.lengthSq() < .0001) return 0;
+    incoming.normalize(); outgoing.normalize();
+    const cross = incoming.x * outgoing.z - incoming.z * outgoing.x;
+    const dot = Math.max(-1, Math.min(1, incoming.dot(outgoing)));
+    return Math.atan2(cross, dot) / Math.max(1, sampleDistance);
+  }
+
   buildSpeedSignals() {
     const glowMap = this.createSignalGlowTexture();
     for (const config of this.speedScenario.signals) {

@@ -1,4 +1,4 @@
-import { BRAKE_POSITIONS, getScenario, lkjControlLimit, phaseAt, signalAt } from './speedRegulationConfig.js';
+import { BRAKE_POSITIONS, getScenario, lkjCurvesAt, phaseAt, signalAt } from './speedRegulationConfig.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -10,6 +10,7 @@ export class SpeedRegulationSimulation extends EventTarget {
 
   reset(scenarioId = this.state?.scenarioId || 'oneStage') {
     const scenario = getScenario(scenarioId);
+    const initialLkjCurves = lkjCurvesAt(scenario, 0);
     this.scenario = scenario;
     this.state = {
       scenarioId: scenario.id,
@@ -38,7 +39,9 @@ export class SpeedRegulationSimulation extends EventTarget {
       grade: 0,
       signal: signalAt(scenario, 0),
       phase: phaseAt(scenario, 0),
-      lkjLimit: lkjControlLimit(scenario, 0),
+      lkjLineLimit: initialLkjCurves.lineLimit,
+      lkjModeLimit: initialLkjCurves.modeLimit,
+      lkjLimit: initialLkjCurves.activeLimit,
       lkjLevel: 'normal',
       lkjAcknowledged: true,
       lkjForcedBrake: 0,
@@ -49,7 +52,17 @@ export class SpeedRegulationSimulation extends EventTarget {
       completed: false,
       qualified: null,
       events: [],
-      samples: [],
+      samples: [{
+        elapsed: 0,
+        distance: 0,
+        speed: scenario.initialSpeed,
+        lineLimit: initialLkjCurves.lineLimit,
+        modeLimit: initialLkjCurves.modeLimit,
+        limit: initialLkjCurves.activeLimit,
+        pipe: 600,
+        brake: 0,
+        traction: scenario.initialTraction,
+      }],
     };
     this.lastSampleAt = -1;
     this.dispatchEvent(new CustomEvent('reset', { detail: this.state }));
@@ -95,6 +108,14 @@ export class SpeedRegulationSimulation extends EventTarget {
         s.lkjForcedBrake = 0;
         this.log('lkj-relief', { accepted: true });
       } else this.log('lkj-relief', { accepted: false });
+    } else if (type === 'lkj-start-align') {
+      this.log('lkj-start-align');
+    } else if (type === 'lkj-position-correct') {
+      this.log('lkj-position-correct', { method: value || 'auto' });
+    } else if (type === 'lkj-mark') {
+      this.log('lkj-mark');
+    } else if (type === 'lkj-patrol') {
+      this.log('lkj-patrol');
     } else return false;
     if (['traction', 'auto-brake', 'independent-brake', 'side-release'].includes(type)) {
       this.log(type, { value: type === 'side-release' ? s.sideRelease : s[type === 'auto-brake' ? 'autoBrake' : type === 'independent-brake' ? 'independentBrake' : 'traction'], previous });
@@ -151,12 +172,15 @@ export class SpeedRegulationSimulation extends EventTarget {
     s.distance += s.speed / 3.6 * dt;
     s.phase = phaseAt(this.scenario, s.distance);
     s.signal = signalAt(this.scenario, s.distance);
-    s.lkjLimit = lkjControlLimit(this.scenario, s.distance);
+    const lkjCurves = lkjCurvesAt(this.scenario, s.distance);
+    s.lkjLineLimit = lkjCurves.lineLimit;
+    s.lkjModeLimit = lkjCurves.modeLimit;
+    s.lkjLimit = lkjCurves.activeLimit;
     this.updateLkjProtection();
 
     if (s.elapsed - this.lastSampleAt >= 0.5) {
       this.lastSampleAt = s.elapsed;
-      s.samples.push({ elapsed: s.elapsed, distance: s.distance, speed: s.speed, limit: s.lkjLimit, pipe: s.trainPipe, brake: s.autoBrake, traction: s.traction });
+      s.samples.push({ elapsed: s.elapsed, distance: s.distance, speed: s.speed, lineLimit: s.lkjLineLimit, modeLimit: s.lkjModeLimit, limit: s.lkjLimit, pipe: s.trainPipe, brake: s.autoBrake, traction: s.traction });
       if (s.samples.length > 900) s.samples.shift();
     }
     if (s.entrySpeed == null && s.distance >= this.scenario.entryDistance) {

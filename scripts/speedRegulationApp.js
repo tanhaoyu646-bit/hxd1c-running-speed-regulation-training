@@ -1,9 +1,9 @@
-import { CAB, PROJECT_ID, getScenario } from './speedRegulationConfig.js';
-import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261101-mobile-cir-lkj-2';
-import { SpeedRegulationAssessment } from './speedRegulationAssessment.js?v=20261101-mobile-cir-lkj-2';
-import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261101-bridge-instruments';
-import { LkjRuntime } from './lkjRuntime.js?v=20261101-mobile-cir-lkj-2';
-import { CirRuntime } from './cirRuntime.js?v=20261101-mobile-cir-lkj-2';
+import { CAB, PROJECT_ID, getScenario, lkjControlLimit } from './speedRegulationConfig.js';
+import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261102-lkj-route-twin-1';
+import { SpeedRegulationAssessment } from './speedRegulationAssessment.js?v=20261102-lkj-route-twin-1';
+import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261102-lkj-route-twin-1';
+import { LkjRuntime } from './lkjRuntime.js?v=20261102-lkj-route-twin-1';
+import { CirRuntime } from './cirRuntime.js?v=20261102-lkj-route-twin-1';
 import {
   clearCandidateDraft,
   createCandidateAttempt,
@@ -22,6 +22,9 @@ const brakeNames = ['运转位', '初制位', '常用Ⅱ', '常用Ⅲ', '常用�
 let simulation = new SpeedRegulationSimulation('oneStage');
 let assessment = new SpeedRegulationAssessment(simulation);
 let routeScene = null;
+let candidateRouteReady = false;
+let candidateCabReady = false;
+let candidateLoadFailed = false;
 let lkj = new LkjRuntime($('#lkj-dock'), simulation);
 let cir = new CirRuntime(simulation);
 let selectedView = 'front';
@@ -39,23 +42,36 @@ hornAudio.loop = true;
 let hornPointerId = null;
 const overlay = $('#cab-overlay');
 const elements = {};
+const mobileLike = matchMedia('(pointer: coarse)').matches
+  || matchMedia('(max-height:620px) and (orientation:landscape)').matches
+  || navigator.maxTouchPoints > 0
+  || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+if (mobileLike) document.body.classList.add('mobile-controls-enabled');
 
 function preloadRouteScene() {
   const storedScenarioId = localStorage.getItem(`${PROJECT_ID}:last-scenario`);
   const scenario = getScenario(storedScenarioId);
   routeScene = new SpeedRegulationScene($('#route-scene'), scenario);
+  lkj.setRouteSampler((distance) => routeScene?.ready ? {
+    grade: routeScene.getPathGrade(distance),
+    curve: routeScene.getPathCurve(distance),
+  } : { grade: 0, curve: 0 });
   const loadStatus = $('#candidate-load-status');
   routeScene.loadPromise.then(() => {
+    candidateRouteReady = true;
     if (loadStatus) {
       loadStatus.textContent = '线路环境已加载，可以进入考评。';
       loadStatus.dataset.state = 'ready';
     }
+    updateCandidateGate();
   }).catch((error) => {
+    candidateLoadFailed = true;
     if (loadStatus) {
       loadStatus.textContent = `线路环境加载失败：${error.message}`;
       loadStatus.dataset.state = 'error';
     }
     $('#status-message').textContent = `线路加载失败：${error.message}`;
+    updateCandidateGate();
   });
 }
 
@@ -63,6 +79,36 @@ function syncVisualViewport() {
   const viewport = window.visualViewport;
   document.documentElement.style.setProperty('--visual-height', `${viewport?.height || window.innerHeight}px`);
   document.documentElement.style.setProperty('--visual-offset-top', `${viewport?.offsetTop || 0}px`);
+  routeScene?.resize?.();
+}
+
+function isPortraitMobile() {
+  return mobileLike && matchMedia('(orientation: portrait)').matches;
+}
+
+function syncLandscapeGate() {
+  const gate = $('#landscape-gate');
+  if (!gate || !candidateProfile) return;
+  gate.hidden = !isPortraitMobile();
+}
+
+async function enterImmersive() {
+  document.documentElement.classList.add('immersive');
+  $('#landscape-gate').hidden = true;
+  try {
+    const root = document.documentElement;
+    if (!document.fullscreenElement) {
+      if (root.requestFullscreen) await root.requestFullscreen({ navigationUI: 'hide' });
+      else if (root.webkitRequestFullscreen) await root.webkitRequestFullscreen();
+    }
+  } catch { /* iPhone Safari 等浏览器可能拒绝网页全屏，保留横屏提示作为回退。 */ }
+  try { await screen.orientation?.lock?.('landscape'); }
+  catch { /* iOS 和部分内置浏览器不支持方向锁定。 */ }
+  setTimeout(() => {
+    scrollTo(0, 1);
+    syncVisualViewport();
+    syncLandscapeGate();
+  }, 160);
 }
 
 function updateCandidateGate() {
@@ -75,8 +121,11 @@ function updateCandidateGate() {
   studentId?.setAttribute('aria-invalid', String(Boolean(studentId?.value) && validation.field === 'studentId'));
   if (error) error.textContent = (name?.value || studentId?.value) && !validation.valid ? validation.message : '';
   if (submit) {
-    submit.disabled = !validation.valid;
-    submit.textContent = validation.valid ? '进入考评' : '请填写姓名和学号';
+    const ready = candidateRouteReady && candidateCabReady && !candidateLoadFailed;
+    submit.disabled = !ready || !validation.valid;
+    submit.textContent = candidateLoadFailed ? '环境加载失败'
+      : !ready ? '考评环境加载中'
+        : validation.valid ? (mobileLike ? '横屏进入考评' : '进入考评') : '请填写姓名和学号';
   }
   return validation;
 }
@@ -90,12 +139,30 @@ function setupCandidateGate() {
   const draft = loadCandidateDraft();
   name.value = draft.name;
   studentId.value = draft.studentId;
+  const cab = $('#cab-view');
+  const cabReady = typeof cab.decode === 'function'
+    ? cab.decode()
+    : new Promise((resolve, reject) => {
+      if (cab.complete && cab.naturalWidth) resolve();
+      else {
+        cab.addEventListener('load', resolve, { once: true });
+        cab.addEventListener('error', reject, { once: true });
+      }
+    });
+  cabReady.then(() => { candidateCabReady = true; updateCandidateGate(); }).catch(() => {
+    candidateLoadFailed = true;
+    const loadStatus = $('#candidate-load-status');
+    loadStatus.textContent = '驾驶台图片加载失败，请刷新页面重试。';
+    loadStatus.dataset.state = 'error';
+    updateCandidateGate();
+  });
   for (const input of [name, studentId]) {
     input.addEventListener('input', updateCandidateGate);
     input.addEventListener('focus', syncVisualViewport);
   }
-  form.addEventListener('submit', (event) => {
+  form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!candidateRouteReady || !candidateCabReady || candidateLoadFailed) return;
     const validation = updateCandidateGate();
     if (!validation.valid) {
       (validation.field === 'name' ? name : studentId).focus();
@@ -106,6 +173,8 @@ function setupCandidateGate() {
     document.body.classList.remove('candidate-entry-active');
     app.inert = false;
     syncVisualViewport();
+    if (mobileLike) await enterImmersive();
+    else routeScene?.resize?.();
   });
   window.visualViewport?.addEventListener('resize', syncVisualViewport);
   window.visualViewport?.addEventListener('scroll', syncVisualViewport);
@@ -285,6 +354,8 @@ function chooseScenario(id) {
   simulation = new SpeedRegulationSimulation(scenario.id);
   assessment = new SpeedRegulationAssessment(simulation);
   lkj.simulation = simulation;
+  lkj.setCandidate(candidateAttempt);
+  lkj.profileCache = null;
   cir.setSimulation(simulation);
   lkj.page = 'main';
   lkj.menuIndex = 0;
@@ -393,8 +464,45 @@ function showResult() {
   $('#result-title').textContent = simulation.scenario.title;
   $('#result-summary').textContent = `进站信号机通过速度 ${result.entrySpeed?.toFixed(1) ?? '—'} km/h，运行 ${result.distance.toFixed(0)} m，用时 ${result.duration.toFixed(0)} s。${result.redline ? '本次触发安全红线。' : ''}`;
   $('#result-categories').innerHTML = result.categories.map((category) => `<div><span>${category.name}</span><b>${category.score}/${category.maximum}</b></div>`).join('');
+  renderResultTrace();
   $('#result-modal').classList.add('open');
   $('#result-modal').setAttribute('aria-hidden', 'false');
+}
+
+function renderResultTrace() {
+  const container = $('#result-trace');
+  if (!container) return;
+  const scenario = simulation.scenario;
+  const state = simulation.state;
+  const width = 900;
+  const height = 220;
+  const left = 42;
+  const right = 884;
+  const top = 22;
+  const bottom = 184;
+  const routeLength = Math.max(1, scenario.finishDistance);
+  const xAt = (distance) => left + clamp(Number(distance) || 0, 0, routeLength) / routeLength * (right - left);
+  const yAt = (speed) => bottom - clamp(Number(speed) || 0, 0, 120) / 120 * (bottom - top);
+  const actual = state.samples.map((sample) => `${xAt(sample.distance).toFixed(1)},${yAt(sample.speed).toFixed(1)}`).join(' ');
+  const control = [];
+  for (let distance = 0; distance <= routeLength; distance += Math.max(20, routeLength / 140)) {
+    control.push(`${xAt(distance).toFixed(1)},${yAt(lkjControlLimit(scenario, distance)).toFixed(1)}`);
+  }
+  const applications = state.events.filter((event) => event.type === 'auto-brake' && event.value > 0 && event.previous?.autoBrake === 0);
+  const releases = state.events.filter((event) => event.type === 'auto-brake' && event.value === 0 && event.previous?.autoBrake > 0);
+  const markers = [
+    ...applications.map((event, index) => ({ ...event, label: scenario.id === 'twoStage' ? `第${index + 1}次制动` : '制动开始', className: 'brake' })),
+    ...releases.map((event) => ({ ...event, label: '缓解充风', className: 'release' })),
+  ].map((event) => {
+    const x = xAt(event.distance);
+    const y = yAt(event.speed);
+    return `<g class="result-marker ${event.className}"><line x1="${x}" y1="${y}" x2="${x}" y2="${bottom}"/><circle cx="${x}" cy="${y}" r="5"/><text x="${Math.min(right - 66, x + 6)}" y="${Math.max(top + 10, y - 7)}">${event.label}</text></g>`;
+  }).join('');
+  container.innerHTML = `<div class="result-trace-head"><b>LKJ运行轨迹复盘</b><span><i class="actual"></i>实际速度</span><span><i class="control"></i>控制曲线</span></div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="LKJ实际速度与控制曲线复盘">
+    <g class="result-grid"><line x1="${left}" y1="${yAt(120)}" x2="${right}" y2="${yAt(120)}"/><line x1="${left}" y1="${yAt(80)}" x2="${right}" y2="${yAt(80)}"/><line x1="${left}" y1="${yAt(40)}" x2="${right}" y2="${yAt(40)}"/><line x1="${left}" y1="${bottom}" x2="${right}" y2="${bottom}"/></g>
+    <text x="4" y="${yAt(120) + 4}">120</text><text x="12" y="${yAt(80) + 4}">80</text><text x="12" y="${yAt(40) + 4}">40</text>
+    <polyline class="result-control-line" points="${control.join(' ')}"/><polyline class="result-actual-line" points="${actual}"/>${markers}
+    <text x="${left}" y="207">0 km</text><text x="${right - 45}" y="207">${(routeLength / 1000).toFixed(1)} km</text></svg>`;
 }
 
 function alertTone(level) {
@@ -460,12 +568,26 @@ document.querySelectorAll('[data-mobile-command]').forEach((button) => button.ad
 $('#view-toggle').addEventListener('click', () => $('#view-menu').classList.toggle('open'));
 document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => { selectView(button.dataset.view); $('#view-menu').classList.remove('open'); }));
 document.querySelectorAll('[data-close-panel]').forEach((button) => button.addEventListener('click', () => togglePanel(button.closest('.side-panel'))));
-$('#fullscreen').addEventListener('click', () => document.fullscreenElement ? document.exitFullscreen() : $('#stage').requestFullscreen());
+$('#fullscreen').addEventListener('click', async () => {
+  if (document.fullscreenElement) await document.exitFullscreen();
+  else if (mobileLike) await enterImmersive();
+  else await $('#stage').requestFullscreen();
+});
+$('#enter-landscape').addEventListener('click', enterImmersive);
 $('#retry').addEventListener('click', () => chooseScenario(simulation.state.scenarioId));
 $('#choose-skill').addEventListener('click', () => { $('#result-modal').classList.remove('open'); $('#skill-picker').classList.add('open'); });
 $('#change-candidate').addEventListener('click', () => { clearCandidateDraft(); location.reload(); });
 window.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') { document.querySelectorAll('.side-panel').forEach((panel) => panel.classList.remove('open')); $('#view-menu').classList.remove('open'); cir.close(); lkj.close(); }
+});
+window.addEventListener('orientationchange', () => {
+  syncVisualViewport();
+  setTimeout(() => { syncVisualViewport(); syncLandscapeGate(); }, 180);
+});
+window.addEventListener('fullscreenchange', () => {
+  syncVisualViewport();
+  if (!document.fullscreenElement && !isPortraitMobile()) document.documentElement.classList.remove('immersive');
+  syncLandscapeGate();
 });
 function stopHorn(event) {
   if (hornPointerId === null || (event?.pointerId != null && event.pointerId !== hornPointerId)) return;

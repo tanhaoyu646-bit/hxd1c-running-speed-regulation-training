@@ -9,6 +9,26 @@ export const SPEED_ROUTE_WINDOW = Object.freeze({
   lateral: 650,
 });
 
+// 线路附属设施的里程直接使用当前 NEIYI TrackDB 路径累计距离。
+// LKJ 与三维场景都以 scenario.startOffset 为零点，避免桥隧标记和车外画面各自硬编码。
+export const ROUTE_INFRASTRUCTURE = Object.freeze([
+  Object.freeze({ id: 'west-bridge', type: 'bridge', label: '桥梁', start: 23_990, end: 24_380 }),
+  Object.freeze({ id: 'dashanpu-bridge', type: 'bridge', label: '大山铺桥', start: 27_004, end: 27_360 }),
+  Object.freeze({ id: 'neiyi-tunnel', type: 'tunnel', label: '隧道', start: 30_229, end: 31_839 }),
+]);
+
+const commonLkj = Object.freeze({
+  lineName: '内宜线',
+  sectionCode: '226',
+  trainNumber: '57001',
+  trainKind: '客本',
+  trainWeight: 900,
+  carCount: 18,
+  trainLength: 42.0,
+  speedGrade: 120,
+  locomotive: 'HXD1C',
+});
+
 export const SCENARIOS = Object.freeze({
   oneStage: Object.freeze({
     id: 'oneStage',
@@ -25,6 +45,15 @@ export const SCENARIOS = Object.freeze({
     stationName: '前方车站',
     entrySignalName: 'K226+091 进站信号机',
     routeLabel: '区间—车站进站',
+    lkj: Object.freeze({ ...commonLkj, startKilometer: 224.091 }),
+    lineLimits: Object.freeze([
+      Object.freeze({ start: -1_500, end: 2000, limit: 120 }),
+      Object.freeze({ start: 2000, end: 2700, limit: 80 }),
+      Object.freeze({ start: 2700, end: 8_000, limit: 120 }),
+    ]),
+    controlTargets: Object.freeze([
+      Object.freeze({ distance: 2000, speed: 45, holdUntil: 2600, serviceDeceleration: 0.42 }),
+    ]),
     signals: [
       { id: 'approach', label: '接近信号机', distance: 520, aspect: 'green-yellow' },
       { id: 'entry', label: 'K226+091 进站信号机', distance: 2000, aspect: 'double-yellow' },
@@ -50,6 +79,15 @@ export const SCENARIOS = Object.freeze({
     stationName: '前方车站',
     entrySignalName: 'K226+091 进站信号机',
     routeLabel: '区间—车站进站',
+    lkj: Object.freeze({ ...commonLkj, startKilometer: 221.591 }),
+    lineLimits: Object.freeze([
+      Object.freeze({ start: -1_500, end: 4500, limit: 120 }),
+      Object.freeze({ start: 4500, end: 5200, limit: 80 }),
+      Object.freeze({ start: 5200, end: 10_000, limit: 120 }),
+    ]),
+    controlTargets: Object.freeze([
+      Object.freeze({ distance: 4500, speed: 45, holdUntil: 5100, serviceDeceleration: 0.42 }),
+    ]),
     signals: [
       { id: 'first-approach', label: '第一接近信号机', distance: 820, aspect: 'green-yellow' },
       { id: 'third-approach', label: '第三接近信号机', distance: 3040, aspect: 'double-yellow' },
@@ -97,15 +135,48 @@ export function phaseAt(scenario, distance) {
 }
 
 export function signalAt(scenario, distance) {
-  return [...scenario.signals].reverse().find((signal) => distance >= signal.distance - 140) || {
-    id: 'clear', label: '区间信号', distance: 0, aspect: 'green',
+  return scenario.signals.find((signal) => distance < signal.distance) || {
+    id: 'clear', label: '通过进站信号机', distance, aspect: 'green',
   };
 }
 
+export function lineLimitAt(scenario, distance) {
+  return scenario.lineLimits?.find((segment) => distance >= segment.start && distance < segment.end)?.limit
+    ?? scenario.lkj?.speedGrade
+    ?? 120;
+}
+
+export function lkjCurvesAt(scenario, distance) {
+  const lineLimit = lineLimitAt(scenario, distance);
+  let modeLimit = scenario.lkj?.speedGrade ?? 120;
+  for (const target of scenario.controlTargets || []) {
+    if (distance > target.holdUntil) continue;
+    if (distance >= target.distance) {
+      modeLimit = Math.min(modeLimit, target.speed);
+      continue;
+    }
+    const remaining = target.distance - distance;
+    const targetMps = target.speed / 3.6;
+    const deceleration = target.serviceDeceleration || 0.42;
+    const envelope = Math.sqrt(targetMps ** 2 + 2 * deceleration * remaining) * 3.6;
+    modeLimit = Math.min(modeLimit, Math.max(target.speed, envelope));
+  }
+  modeLimit = Math.min(scenario.lkj?.speedGrade ?? 120, modeLimit);
+  return { lineLimit, modeLimit, activeLimit: Math.min(lineLimit, modeLimit) };
+}
+
 export function lkjControlLimit(scenario, distance) {
-  const remaining = Math.max(0, scenario.entryDistance - distance);
-  const entryMps = scenario.maximumEntrySpeed / 3.6;
-  const serviceDeceleration = 0.42;
-  const curve = Math.sqrt(entryMps ** 2 + 2 * serviceDeceleration * remaining) * 3.6;
-  return Math.max(scenario.maximumEntrySpeed, Math.min(120, curve));
+  return lkjCurvesAt(scenario, distance).activeLimit;
+}
+
+export function routeFacilitiesForScenario(scenario) {
+  return ROUTE_INFRASTRUCTURE.map((facility) => Object.freeze({
+    ...facility,
+    start: facility.start - scenario.startOffset,
+    end: facility.end - scenario.startOffset,
+  }));
+}
+
+export function absoluteKilometerAt(scenario, distance) {
+  return (scenario.lkj?.startKilometer || 0) + Math.max(0, Number(distance) || 0) / 1000;
 }
