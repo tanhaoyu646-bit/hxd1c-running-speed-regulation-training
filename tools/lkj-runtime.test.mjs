@@ -43,17 +43,19 @@ test('LKJ桥隧标记来自原线路累计里程并随技能起点换算', () =>
   const oneBridge = oneStage.find((item) => item.id === 'dashanpu-bridge');
   const twoBridge = twoStage.find((item) => item.id === 'dashanpu-bridge');
   const tunnel = twoStage.find((item) => item.id === 'neiyi-tunnel');
-  assert.equal(oneBridge.start, 124);
-  assert.equal(twoBridge.start, 2624);
-  assert.equal(tunnel.start, 5849);
+  assert.equal(oneBridge.start, 1124);
+  assert.equal(twoBridge.start, 3124);
+  assert.equal(tunnel.start, 6349);
 });
 
 test('LKJ不再使用140km/h错位标尺或只保留250个历史点', async () => {
   const source = await readFile(new URL('../scripts/lkjRuntime.js', import.meta.url), 'utf8');
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const css = await readFile(new URL('../styles/speed-regulation.css', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /slice\(-250\)/);
   assert.doesNotMatch(source, /Math\.min\(140/);
   assert.match(source, /lkj-native-line-limit/);
   assert.match(source, /routeFacilitiesForScenario/);
   assert.match(html, /id="result-trace"/);
+  assert.match(css, /body\.mobile-controls-enabled \.lkj-dock[^{]*\{[^}]*left:max\(2px,env\(safe-area-inset-left\)\)[^}]*width:min\(30vw/);
 });

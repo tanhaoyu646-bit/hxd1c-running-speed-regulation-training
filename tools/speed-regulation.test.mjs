@@ -19,9 +19,9 @@ function runOneStage() {
   let pressureAdded = false;
   for (let index = 0; index < 12_000 && !simulation.state.completed; index += 1) {
     const state = simulation.state;
-    if (state.distance > 70 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
-    if (state.distance > 100 && !brakeApplied) { simulation.command('auto-brake', 1); brakeApplied = true; }
-    if (state.distance > 450 && !pressureAdded) { simulation.command('auto-brake', 2); pressureAdded = true; }
+    if (state.distance > 1300 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
+    if (state.distance > 1400 && !brakeApplied) { simulation.command('auto-brake', 1); brakeApplied = true; }
+    if (state.distance > 1800 && !pressureAdded) { simulation.command('auto-brake', 2); pressureAdded = true; }
     if (state.lkjForcedBrake && state.lkjLevel === 'normal' && state.speed <= state.lkjLimit + 1) simulation.command('lkj-relief');
     simulation.tick(.05);
   }
@@ -37,14 +37,14 @@ function runTwoStage() {
   let secondApplied = false;
   for (let index = 0; index < 20_000 && !simulation.state.completed; index += 1) {
     const state = simulation.state;
-    if (state.distance > 620 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
-    if (state.distance > 720 && !firstApplied) { simulation.command('auto-brake', 1); firstApplied = true; }
-    if (state.speed < 93 && firstApplied && !firstReleased) {
+    if (state.distance > 1300 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
+    if (state.distance > 1400 && !firstApplied) { simulation.command('auto-brake', 1); firstApplied = true; }
+    if (state.speed < 95 && firstApplied && !firstReleased) {
       simulation.command('auto-brake', 0);
       simulation.command('traction', 2);
       firstReleased = true;
     }
-    if (state.distance > 3040 && firstReleased && !secondApplied) {
+    if (state.distance > 3300 && firstReleased && !secondApplied) {
       simulation.command('traction', 0);
       simulation.command('auto-brake', 1);
       secondApplied = true;
@@ -57,8 +57,13 @@ function runTwoStage() {
 
 test('两个技能配置、里程和状态互相独立', () => {
   assert.notEqual(SCENARIOS.oneStage.startOffset, SCENARIOS.twoStage.startOffset);
-  assert.equal(SCENARIOS.oneStage.entryDistance, 2000);
-  assert.equal(SCENARIOS.twoStage.entryDistance, 4500);
+  assert.equal(SCENARIOS.oneStage.initialSpeed, 110);
+  assert.equal(SCENARIOS.twoStage.initialSpeed, 110);
+  assert.equal(SCENARIOS.oneStage.entryDistance, 3000);
+  assert.equal(SCENARIOS.twoStage.entryDistance, 5000);
+  assert.ok(SCENARIOS.oneStage.phases[0].end >= 1000);
+  assert.ok(SCENARIOS.twoStage.phases[0].end >= 700);
+  assert.equal(SCENARIOS.oneStage.startOffset + SCENARIOS.oneStage.entryDistance, SCENARIOS.twoStage.startOffset + SCENARIOS.twoStage.entryDistance);
   const first = new SpeedRegulationSimulation('oneStage');
   const second = new SpeedRegulationSimulation('twoStage');
   first.command('traction', 0);
@@ -136,7 +141,7 @@ test('两段制动包含缓解充风和第二次50kPa减压', () => {
   const result = new SpeedRegulationAssessment(simulation).result();
   const applications = simulation.state.events.filter((event) => event.type === 'auto-brake' && event.value > 0 && event.previous?.autoBrake === 0);
   assert.equal(simulation.state.completed, true);
-  assert.ok(simulation.state.samples.some((sample) => sample.distance > 1800 && sample.distance < 3400 && sample.pipe >= 590));
+  assert.ok(simulation.state.samples.some((sample) => sample.distance > SCENARIOS.twoStage.rechargeWindow[0] && sample.distance < SCENARIOS.twoStage.rechargeWindow[1] && sample.pipe >= 590));
   assert.equal(applications.length, 2);
   assert.ok(simulation.state.entrySpeed <= 45, `entry speed ${simulation.state.entrySpeed}`);
   assert.equal(result.qualified, true);

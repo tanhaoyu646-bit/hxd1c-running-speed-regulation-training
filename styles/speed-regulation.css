@@ -108,3 +108,12 @@ body.candidate-entry-active{overflow:hidden}
   .mobile-operations header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}.mobile-operations header b{font-size:12px}.mobile-operations header button{width:29px;height:27px;border:1px solid #97545c;border-radius:5px;background:#3d2028;font-size:20px}
   .mobile-control-row{display:flex;align-items:center;gap:4px;margin:3px 0}.mobile-control-row span{flex:1;min-width:0;color:#a8ccdc;font-size:9px}.mobile-control-row b{display:block;color:#e8fbff;font-size:11px}.mobile-control-row button,.mobile-device-row button{min-width:33px;min-height:32px;padding:2px 5px;border:1px solid #4daed2;border-radius:5px;background:#124056;font-size:14px}.mobile-device-row{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:6px}.mobile-device-row button{font-size:10px}
 }
+
+/* 手机横屏LKJ保持左上角设备小窗，尺寸按实测参考图约占屏宽30%。 */
+@media(orientation:landscape) and (max-height:620px){
+  body.mobile-controls-enabled .lkj-dock{position:fixed;left:max(2px,env(safe-area-inset-left));top:max(2px,env(safe-area-inset-top));width:min(30vw,calc(54dvh * 800 / 615));max-height:none;transform:none;z-index:120}
+  body.mobile-controls-enabled .lkj-native-speed,body.mobile-controls-enabled .lkj-native-limit,body.mobile-controls-enabled .lkj-native-distance{font-size:clamp(11px,3.2vh,18px)}
+  body.mobile-controls-enabled .lkj-native-station,body.mobile-controls-enabled .lkj-native-km,body.mobile-controls-enabled .lkj-native-date,body.mobile-controls-enabled .lkj-native-time{font-size:clamp(5px,1.05vh,8px)}
+  body.mobile-controls-enabled .lkj-native-equipment{font-size:clamp(3px,.72vh,5px)}
+  body.mobile-controls-enabled .lkj-close{width:11%;font-size:clamp(11px,2.2vh,15px)}
+}

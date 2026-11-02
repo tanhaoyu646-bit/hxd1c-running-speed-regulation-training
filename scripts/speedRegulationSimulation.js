@@ -138,7 +138,8 @@ export class SpeedRegulationSimulation extends EventTarget {
     const pipeTau = targetPipe < s.trainPipe ? 6.6 : 14.0;
     s.trainPipe += (targetPipe - s.trainPipe) * (1 - Math.exp(-dt / pipeTau));
     s.tailPipe += (s.trainPipe - s.tailPipe) * (1 - Math.exp(-dt / 2.2));
-    if (s.autoBrake === 0 && s.trainPipe >= 590 && s.distance > 1800 && s.distance < 3400 && !s.pipeRechargeRecorded) {
+    const rechargeWindow = this.scenario.rechargeWindow || [1800, 3400];
+    if (s.autoBrake === 0 && s.trainPipe >= 590 && s.distance > rechargeWindow[0] && s.distance < rechargeWindow[1] && !s.pipeRechargeRecorded) {
       s.pipeRechargeRecorded = true;
       this.log('pipe-recharged', { pipe: s.trainPipe });
     }

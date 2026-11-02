@@ -1,9 +1,9 @@
 import { CAB, PROJECT_ID, getScenario, lkjControlLimit } from './speedRegulationConfig.js';
-import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261102-lkj-route-twin-1';
-import { SpeedRegulationAssessment } from './speedRegulationAssessment.js?v=20261102-lkj-route-twin-1';
-import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261102-lkj-route-twin-1';
-import { LkjRuntime } from './lkjRuntime.js?v=20261102-lkj-route-twin-1';
-import { CirRuntime } from './cirRuntime.js?v=20261102-lkj-route-twin-1';
+import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261103-mobile-lkj-buffer-1';
+import { SpeedRegulationAssessment } from './speedRegulationAssessment.js?v=20261103-mobile-lkj-buffer-1';
+import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261103-mobile-lkj-buffer-1';
+import { LkjRuntime } from './lkjRuntime.js?v=20261103-mobile-lkj-buffer-1';
+import { CirRuntime } from './cirRuntime.js?v=20261103-mobile-lkj-buffer-1';
 import {
   clearCandidateDraft,
   createCandidateAttempt,

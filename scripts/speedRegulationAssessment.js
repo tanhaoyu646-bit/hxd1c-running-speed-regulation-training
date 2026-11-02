@@ -52,21 +52,22 @@ export class SpeedRegulationAssessment {
     let timing = 20;
     if (!firstBrake) timing = 0;
     else if (scenario.id === 'oneStage') {
-      if (!between(firstBrake.distance, 100, 750)) timing -= 10;
+      if (!between(firstBrake.distance, 950, 1650)) timing -= 10;
       if (!between(firstBrake.value, 1, 2)) timing -= 5;
     } else {
-      if (!between(firstBrake.distance, 600, 1250)) timing -= 6;
+      if (!between(firstBrake.distance, 1050, 1800)) timing -= 6;
       const firstRelease = releases.find((event) => event.elapsed > firstBrake.elapsed);
       if (!firstRelease || !between(firstRelease.speed, 86, 97)) timing -= 6;
       const secondBrake = brakeApplications[1];
-      if (!secondBrake || !between(secondBrake.distance, 2850, 3550)) timing -= 8;
+      if (!secondBrake || !between(secondBrake.distance, 3300, 4050)) timing -= 8;
     }
 
     let technique = 20;
     if (events.some((event) => event.type === 'auto-brake' && event.value >= 4)) technique -= 8;
     if (events.filter((event) => event.type === 'auto-brake').length > 9) technique -= 5;
     if (scenario.id === 'twoStage') {
-      const recharge = state.samples.some((sample) => sample.distance > 1800 && sample.distance < 3400 && sample.pipe >= 590);
+      const rechargeWindow = scenario.rechargeWindow || [1800, 3400];
+      const recharge = state.samples.some((sample) => sample.distance > rechargeWindow[0] && sample.distance < rechargeWindow[1] && sample.pipe >= 590);
       if (!recharge) technique -= 7;
     }
 
