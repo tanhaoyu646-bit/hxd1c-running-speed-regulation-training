@@ -163,6 +163,9 @@ export class MstsRouteScene {
           if (material.texture === 'Sign.png') material.texture = 'throughSignalSign.png';
         });
       }
+      // 供途中调速等派生场景复用原游戏信号机本体；动态灯态仍由各项目独立控制。
+      this.sourceSceneData = sceneData;
+      this.repairAssetData = repairAssetData;
       this.buildRoutePath(pathData, sceneData);
       if (this.isCorridor) {
         // 本务线钢轨在加载时已经覆盖完整 TrackDB 路径；远裁剪面也必须覆盖同一范围，

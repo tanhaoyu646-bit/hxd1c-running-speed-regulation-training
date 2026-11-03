@@ -52,7 +52,7 @@ export class SpeedRegulationAssessment {
     let timing = 20;
     if (!firstBrake) timing = 0;
     else if (scenario.id === 'oneStage') {
-      if (!between(firstBrake.distance, 950, 1650)) timing -= 10;
+      if (!between(firstBrake.distance, 2950, 3650)) timing -= 10;
       if (!between(firstBrake.value, 1, 2)) timing -= 5;
     } else {
       if (!between(firstBrake.distance, 1050, 1800)) timing -= 6;

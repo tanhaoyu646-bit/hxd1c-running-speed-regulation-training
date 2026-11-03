@@ -38,3 +38,12 @@ test('原桥面两端与本务线中心线采用同一高程，桥段接头不�
     }
   }
 });
+
+test('途中调速使用原游戏通过信号机和进站信号机本体', async () => {
+  const source = await readFile(new URL('../scripts/speedRegulationScene.js', import.meta.url), 'utf8');
+  const base = await readFile(new URL('../scripts/mstsRouteScene.js', import.meta.url), 'utf8');
+  assert.match(source, /createSourceShapeObject\(this\.repairAssetData, 'tongguo\.s'/);
+  assert.match(source, /createSourceShapeObject\(this\.sourceSceneData, 'jinzhan\.s'/);
+  assert.match(base, /this\.sourceSceneData = sceneData/);
+  assert.match(base, /this\.repairAssetData = repairAssetData/);
+});

@@ -2,6 +2,16 @@ export const PROJECT_ID = 'hxd1c-running-speed-regulation-v1';
 
 export const CAB = Object.freeze({ width: 640, height: 480 });
 
+// 与“坡道驾驶调速”项目保持同一主手柄给定逻辑：正级位对应目标速度，
+// 实际速度达到或超过该级位目标后不再输出牵引力；坡度和阻力决定实际平衡速度。
+export const TRACTION_MAX = 12;
+export const DYNAMIC_BRAKE_MAX = 8;
+export const TRACTION_TARGET_SPEEDS = Object.freeze([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]);
+
+export function tractionTargetSpeed(notch) {
+  return TRACTION_TARGET_SPEEDS[Math.max(0, Math.min(TRACTION_MAX, Math.round(Number(notch) || 0)))] || 0;
+}
+
 export const SPEED_ROUTE_WINDOW = Object.freeze({
   start: 23_500,
   // 保留大山铺前桥梁、邻线以及 30.24–31.86 km 原生隧道的完整世界块。
@@ -36,43 +46,7 @@ export const SCENARIOS = Object.freeze({
     shortTitle: '一段制动',
     initialSpeed: 110,
     initialTraction: 2,
-    // 起点前移1km，保留进入考评后的瞭望、LKJ确认和牵引回零缓冲段。
-    startOffset: 25880,
-    routeWindow: SPEED_ROUTE_WINDOW,
-    entryDistance: 3000,
-    finishDistance: 3050,
-    targetSpeed: 40,
-    maximumEntrySpeed: 45,
-    stationName: '前方车站',
-    entrySignalName: 'K226+091 进站信号机',
-    routeLabel: '区间—车站进站',
-    lkj: Object.freeze({ ...commonLkj, startKilometer: 223.091 }),
-    lineLimits: Object.freeze([
-      Object.freeze({ start: -1_500, end: 3000, limit: 120 }),
-      Object.freeze({ start: 3000, end: 3700, limit: 80 }),
-      Object.freeze({ start: 3700, end: 8_000, limit: 120 }),
-    ]),
-    controlTargets: Object.freeze([
-      Object.freeze({ distance: 3000, speed: 45, holdUntil: 3600, serviceDeceleration: 0.42 }),
-    ]),
-    signals: [
-      { id: 'approach', label: '接近信号机', distance: 1520, aspect: 'green-yellow' },
-      { id: 'entry', label: 'K226+091 进站信号机', distance: 3000, aspect: 'double-yellow' },
-    ],
-    phases: [
-      { id: 'prepare', start: 0, end: 1000, label: '进入考评缓冲区段' },
-      { id: 'approach', start: 1000, end: 1520, label: '接近区段' },
-      { id: 'braking', start: 1520, end: 2750, label: '制动调速区段' },
-      { id: 'entry', start: 2750, end: 3050, label: '进站信号机前' },
-    ],
-  }),
-  twoStage: Object.freeze({
-    id: 'twoStage',
-    title: '途中两段制动调速',
-    shortTitle: '两段制动',
-    initialSpeed: 110,
-    initialTraction: 2,
-    // 起点前移500m，给两段制动考评留出完整的观察与准备时间。
+    // 起点位于进站前第二架通过信号机外方，完整保留两个自动闭塞分区。
     startOffset: 23880,
     routeWindow: SPEED_ROUTE_WINDOW,
     entryDistance: 5000,
@@ -92,15 +66,52 @@ export const SCENARIOS = Object.freeze({
       Object.freeze({ distance: 5000, speed: 45, holdUntil: 5600, serviceDeceleration: 0.42 }),
     ]),
     signals: [
-      { id: 'first-approach', label: '第一接近信号机', distance: 1320, aspect: 'green-yellow' },
-      { id: 'third-approach', label: '第三接近信号机', distance: 3540, aspect: 'double-yellow' },
+      { id: 'second-through', label: '进站前第二架通过信号机', distance: 1320, aspect: 'green-yellow' },
+      { id: 'first-through', label: '进站前第一架通过信号机', distance: 3540, aspect: 'yellow' },
       { id: 'entry', label: 'K226+091 进站信号机', distance: 5000, aspect: 'double-yellow' },
     ],
     phases: [
-      { id: 'prepare', start: 0, end: 700, label: '进入考评缓冲区段' },
-      { id: 'first', start: 700, end: 2000, label: '第一制动区段' },
+      { id: 'prepare', start: 0, end: 1320, label: '第二架通过信号机外方' },
+      { id: 'second-through', start: 1320, end: 3000, label: '第二接近闭塞分区' },
+      { id: 'braking', start: 3000, end: 4750, label: '第一接近制动调速区段' },
+      { id: 'entry', start: 4750, end: 5050, label: '进站信号机前' },
+    ],
+  }),
+  twoStage: Object.freeze({
+    id: 'twoStage',
+    title: '途中两段制动调速',
+    shortTitle: '两段制动',
+    initialSpeed: 110,
+    initialTraction: 2,
+    // 同样从第二架通过信号机外方开始；两个技能共用同一组实际信号位置。
+    startOffset: 23880,
+    routeWindow: SPEED_ROUTE_WINDOW,
+    entryDistance: 5000,
+    finishDistance: 5050,
+    targetSpeed: 40,
+    maximumEntrySpeed: 45,
+    stationName: '前方车站',
+    entrySignalName: 'K226+091 进站信号机',
+    routeLabel: '区间—车站进站',
+    lkj: Object.freeze({ ...commonLkj, startKilometer: 221.091 }),
+    lineLimits: Object.freeze([
+      Object.freeze({ start: -1_500, end: 5000, limit: 120 }),
+      Object.freeze({ start: 5000, end: 5700, limit: 80 }),
+      Object.freeze({ start: 5700, end: 10_000, limit: 120 }),
+    ]),
+    controlTargets: Object.freeze([
+      Object.freeze({ distance: 5000, speed: 45, holdUntil: 5600, serviceDeceleration: 0.42 }),
+    ]),
+    signals: [
+      { id: 'second-through', label: '进站前第二架通过信号机', distance: 1320, aspect: 'green-yellow' },
+      { id: 'first-through', label: '进站前第一架通过信号机', distance: 3540, aspect: 'yellow' },
+      { id: 'entry', label: 'K226+091 进站信号机', distance: 5000, aspect: 'double-yellow' },
+    ],
+    phases: [
+      { id: 'prepare', start: 0, end: 700, label: '第二架通过信号机外方' },
+      { id: 'first', start: 700, end: 2000, label: '第二接近第一次制动区段' },
       { id: 'recharge', start: 2000, end: 3300, label: '缓解充风区段' },
-      { id: 'second', start: 3300, end: 4750, label: '第二制动区段' },
+      { id: 'second', start: 3300, end: 4750, label: '第一接近第二次制动区段' },
       { id: 'entry', start: 4750, end: 5050, label: '进站信号机前' },
     ],
     rechargeWindow: Object.freeze([2300, 3900]),

@@ -1,4 +1,13 @@
-import { BRAKE_POSITIONS, getScenario, lkjCurvesAt, phaseAt, signalAt } from './speedRegulationConfig.js';
+import {
+  BRAKE_POSITIONS,
+  DYNAMIC_BRAKE_MAX,
+  getScenario,
+  lkjCurvesAt,
+  phaseAt,
+  signalAt,
+  TRACTION_MAX,
+  tractionTargetSpeed,
+} from './speedRegulationConfig.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -21,6 +30,8 @@ export class SpeedRegulationSimulation extends EventTarget {
       speed: scenario.initialSpeed,
       acceleration: 0,
       traction: scenario.initialTraction,
+      tractionTargetSpeed: tractionTargetSpeed(scenario.initialTraction),
+      balanceSpeed: 0,
       direction: 'F',
       autoBrake: 0,
       independentBrake: 0,
@@ -82,7 +93,10 @@ export class SpeedRegulationSimulation extends EventTarget {
     if (s.completed) return false;
     if (s.status === 'ready' && type !== 'lkj-open') this.start();
     const previous = { traction: s.traction, autoBrake: s.autoBrake, independentBrake: s.independentBrake };
-    if (type === 'traction') s.traction = clamp(Math.round(Number(value) || 0), -8, 7);
+    if (type === 'traction') {
+      s.traction = clamp(Math.round(Number(value) || 0), -DYNAMIC_BRAKE_MAX, TRACTION_MAX);
+      s.tractionTargetSpeed = tractionTargetSpeed(s.traction);
+    }
     else if (type === 'auto-brake') s.autoBrake = clamp(Math.round(Number(value) || 0), 0, 5);
     else if (type === 'independent-brake') s.independentBrake = clamp(Math.round(Number(value) || 0), 0, 5);
     else if (type === 'side-release') s.sideRelease = Boolean(value);
@@ -150,24 +164,37 @@ export class SpeedRegulationSimulation extends EventTarget {
     const desiredLoco = s.sideRelease ? independentCylinder : Math.max(automaticCylinder, independentCylinder);
     s.locomotiveCylinder += (desiredLoco - s.locomotiveCylinder) * (1 - Math.exp(-dt / 1.5));
 
-    const speedMps = s.speed / 3.6;
-    const tractionForce = s.traction > 0 && s.autoBrake === 0 && s.lkjForcedBrake === 0 && s.lkjLevel !== 'unload'
-      ? s.traction * 38_000 * clamp(1.18 - s.speed / 210, 0.48, 1.1)
+    const speedMps = Math.max(.5, s.speed / 3.6);
+    const mass = 900_000;
+    // 本项目为约900 t旅客列车；沿用坡道项目的阻力组成，但按本列车质量标定，
+    // 避免直接套用4200 t货列参数造成惰行速度异常快速衰减。
+    const rollingResistance = 30_000 + mass * .002 + speedMps * speedMps * 12;
+    const gradeForce = mass * 9.81 * clamp(s.grade, -20, 20) / 1000;
+    const tractionEnvelope = Math.min(520_000, 7_200_000 / speedMps);
+    const tractionAuthority = s.traction > 0 ? clamp(.72 + .28 * s.traction / TRACTION_MAX, 0, 1) : 0;
+    const speedError = s.tractionTargetSpeed - s.speed;
+    const holdingForce = Math.max(0, rollingResistance + gradeForce);
+    const controllerForce = holdingForce + speedError * mass * .0075;
+    // 主手柄正级位是目标速度给定。达到或超过该级位对应速度后切除牵引输出，
+    // 低于目标时再按坡度、阻力、恒功率包络和黏着上限给出所需牵引力。
+    const tractionForce = s.traction > 0 && speedError > 0 && s.autoBrake === 0 && s.lkjForcedBrake === 0 && s.lkjLevel !== 'unload'
+      ? clamp(controllerForce, 0, tractionAuthority * tractionEnvelope)
       : 0;
-    const electricBrake = s.traction < 0 ? Math.abs(s.traction) * 42_000 : 0;
+    const dynamicFraction = Math.abs(Math.min(0, s.traction)) / DYNAMIC_BRAKE_MAX;
+    const lowSpeedBrakeFactor = clamp(s.speed / 15, 0, 1);
+    const electricBrake = dynamicFraction * Math.min(370_000, 7_200_000 / speedMps) * lowSpeedBrakeFactor;
     s.tractionForce = tractionForce;
     s.electricBrakeForce = electricBrake;
+    s.balanceSpeed = this.estimateBalanceSpeed(s.traction, s.grade);
     const targetCurrent = clamp((tractionForce || electricBrake) / 310, 0, 900);
     s.tractionCurrent += (targetCurrent - s.tractionCurrent) * (1 - Math.exp(-dt / 0.45));
     s.netVoltage += (clamp(2500 - s.tractionCurrent * 0.12, 2200, 2600) - s.netVoltage) * (1 - Math.exp(-dt / 2));
     s.mainReservoir += (clamp(900 - Math.max(0, 600 - s.trainPipe) * 0.07, 820, 900) - s.mainReservoir) * (1 - Math.exp(-dt / 5));
-    const rollingResistance = 30_000 + speedMps * speedMps * 10;
     // 按“标准旅客列车”校准：50 kPa 初减压用于两段制动的第二段，
     // 一段制动若减速不足则需要追加减压，不能用同一制动力硬套两个技能。
     const pneumaticForce = s.brakeCylinder * 1_200;
-    const gradeForce = 900_000 * 9.81 * clamp(s.grade, -20, 20) / 1000;
     const netForce = tractionForce - electricBrake - rollingResistance - pneumaticForce - gradeForce;
-    const newAcceleration = netForce / 900_000;
+    const newAcceleration = netForce / mass;
     s.acceleration += (newAcceleration - s.acceleration) * (1 - Math.exp(-dt / 0.7));
     s.speed = Math.max(0, s.speed + s.acceleration * dt * 3.6);
     s.distance += s.speed / 3.6 * dt;
@@ -181,7 +208,7 @@ export class SpeedRegulationSimulation extends EventTarget {
 
     if (s.elapsed - this.lastSampleAt >= 0.5) {
       this.lastSampleAt = s.elapsed;
-      s.samples.push({ elapsed: s.elapsed, distance: s.distance, speed: s.speed, lineLimit: s.lkjLineLimit, modeLimit: s.lkjModeLimit, limit: s.lkjLimit, pipe: s.trainPipe, brake: s.autoBrake, traction: s.traction });
+      s.samples.push({ elapsed: s.elapsed, distance: s.distance, speed: s.speed, lineLimit: s.lkjLineLimit, modeLimit: s.lkjModeLimit, limit: s.lkjLimit, pipe: s.trainPipe, brake: s.autoBrake, traction: s.traction, tractionTargetSpeed: s.tractionTargetSpeed, tractionForce: s.tractionForce, grade: s.grade });
       if (s.samples.length > 900) s.samples.shift();
     }
     if (s.entrySpeed == null && s.distance >= this.scenario.entryDistance) {
@@ -201,6 +228,21 @@ export class SpeedRegulationSimulation extends EventTarget {
       this.dispatchEvent(new CustomEvent('complete', { detail: s }));
     }
     this.emitChange();
+  }
+
+  estimateBalanceSpeed(notch, grade) {
+    if (notch <= 0) return 0;
+    const mass = 900_000;
+    const target = tractionTargetSpeed(notch);
+    let balance = 0;
+    for (let speed = 2; speed <= target; speed += 1) {
+      const speedMps = Math.max(.5, speed / 3.6);
+      const authority = clamp(.72 + .28 * notch / TRACTION_MAX, 0, 1);
+      const available = authority * Math.min(520_000, 7_200_000 / speedMps);
+      const resistance = 30_000 + mass * .002 + speedMps * speedMps * 12 + mass * 9.81 * grade / 1000;
+      if (available >= Math.max(0, resistance)) balance = speed;
+    }
+    return balance;
   }
 
   updateLkjProtection() {

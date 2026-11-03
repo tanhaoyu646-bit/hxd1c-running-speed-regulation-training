@@ -1,9 +1,9 @@
-import { CAB, PROJECT_ID, getScenario, lkjControlLimit } from './speedRegulationConfig.js';
-import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261103-mobile-lkj-buffer-1';
-import { SpeedRegulationAssessment } from './speedRegulationAssessment.js?v=20261103-mobile-lkj-buffer-1';
-import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261103-mobile-lkj-buffer-1';
-import { LkjRuntime } from './lkjRuntime.js?v=20261103-mobile-lkj-buffer-1';
-import { CirRuntime } from './cirRuntime.js?v=20261103-mobile-lkj-buffer-1';
+import { CAB, PROJECT_ID, getScenario, lkjControlLimit, TRACTION_MAX } from './speedRegulationConfig.js';
+import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261103-traction-block-signals-2';
+import { SpeedRegulationAssessment } from './speedRegulationAssessment.js?v=20261103-traction-block-signals-2';
+import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261103-traction-block-signals-2';
+import { LkjRuntime } from './lkjRuntime.js?v=20261103-traction-block-signals-2';
+import { CirRuntime } from './cirRuntime.js?v=20261103-traction-block-signals-2';
 import {
   clearCandidateDraft,
   createCandidateAttempt,
@@ -252,7 +252,10 @@ function frame(element, index, columns, rows) {
   element.style.backgroundPosition = `${columns === 1 ? 0 : column / (columns - 1) * 100}% ${rows === 1 ? 0 : row / (rows - 1) * 100}%`;
 }
 
-function tractionFrame(value) { return value > 0 ? Math.max(0, 7 - Math.min(7, value)) : value === 0 ? 7 : Math.min(15, 7 + Math.min(8, Math.abs(value))); }
+function tractionFrame(value) {
+  // 驾驶台贴图仅有7个正牵引姿态，12个速度给定级位按全行程映射到原手柄姿态。
+  return value > 0 ? Math.max(0, 7 - Math.round(Math.min(TRACTION_MAX, value) / TRACTION_MAX * 7)) : value === 0 ? 7 : Math.min(15, 7 + Math.min(8, Math.abs(value)));
+}
 
 function createCabControls() {
   overlay.replaceChildren();
@@ -301,7 +304,7 @@ function createCabControls() {
   const controls = [
     ['auto', elements.auto, 0, 5, 13],
     ['independent', elements.independent, 0, 5, 13],
-    ['traction', elements.traction, -8, 7, 19],
+    ['traction', elements.traction, -8, TRACTION_MAX, 12],
   ];
   for (const [id, sprite, min, max, step] of controls) {
     const begin = (event) => {
@@ -398,7 +401,7 @@ function render() {
   frame(elements.direction, s.direction === 'R' ? 0 : s.direction === 'N' ? 1 : 2, 3, 1);
   elements.autoBadge.querySelector('span').textContent = brakeNames[s.autoBrake];
   elements.independentBadge.querySelector('span').textContent = s.independentBrake ? `${s.independentBrake}级` : '缓解位';
-  elements.tractionBadge.querySelector('span').textContent = s.traction > 0 ? `牵引 ${s.traction}级` : s.traction < 0 ? `电制 ${Math.abs(s.traction)}级` : '零位';
+  elements.tractionBadge.querySelector('span').textContent = s.traction > 0 ? `牵引 ${s.traction}级 / ${s.tractionTargetSpeed} km/h` : s.traction < 0 ? `电制 ${Math.abs(s.traction)}级` : '零位';
   $('[data-mobile-traction]').textContent = elements.tractionBadge.querySelector('span').textContent;
   $('[data-mobile-auto]').textContent = brakeNames[s.autoBrake];
   $('[data-mobile-independent]').textContent = s.independentBrake ? `${s.independentBrake}级` : '缓解位';
@@ -445,7 +448,7 @@ function renderData(s) {
   const grade = routeScene?.getPathGrade(s.distance) || 0;
   const rows = [
     ['速度', `${s.speed.toFixed(1)} km/h`], ['加速度', `${s.acceleration.toFixed(3)} m/s²`], ['LKJ限速', `${s.lkjLimit.toFixed(0)} km/h`], ['运行距离', `${s.distance.toFixed(0)} m`], ['目标距离', `${Math.max(0, simulation.scenario.entryDistance - s.distance).toFixed(0)} m`],
-    ['总风缸', `${s.mainReservoir.toFixed(0)} kPa`], ['列车管', `${s.trainPipe.toFixed(0)} kPa`], ['列尾风压', `${s.tailPipe.toFixed(0)} kPa`], ['制动缸', `${s.brakeCylinder.toFixed(0)} kPa`], ['网压', `${(s.netVoltage / 100).toFixed(1)} kV`], ['牵引电流', `${s.tractionCurrent.toFixed(0)} A`], ['牵引力', `${(s.tractionForce / 1000).toFixed(0)} kN`], ['电制动力', `${(s.electricBrakeForce / 1000).toFixed(0)} kN`], ['线路坡度', `${grade >= 0 ? '+' : ''}${grade.toFixed(1)} ‰`], ['牵引手柄', `${s.traction} 级`], ['自阀', brakeNames[s.autoBrake]],
+    ['总风缸', `${s.mainReservoir.toFixed(0)} kPa`], ['列车管', `${s.trainPipe.toFixed(0)} kPa`], ['列尾风压', `${s.tailPipe.toFixed(0)} kPa`], ['制动缸', `${s.brakeCylinder.toFixed(0)} kPa`], ['网压', `${(s.netVoltage / 100).toFixed(1)} kV`], ['牵引电流', `${s.tractionCurrent.toFixed(0)} A`], ['牵引力', `${(s.tractionForce / 1000).toFixed(0)} kN`], ['电制动力', `${(s.electricBrakeForce / 1000).toFixed(0)} kN`], ['线路坡度', `${grade >= 0 ? '+' : ''}${grade.toFixed(1)} ‰`], ['牵引手柄', s.traction > 0 ? `${s.traction} 级 / 给定 ${s.tractionTargetSpeed} km/h` : `${s.traction} 级`], ['估算平衡速度', `${s.balanceSpeed.toFixed(0)} km/h`], ['自阀', brakeNames[s.autoBrake]],
   ];
   $('#run-data').innerHTML = rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${value}</dd></div>`).join('');
 }
@@ -556,7 +559,7 @@ document.querySelectorAll('[data-mobile-command]').forEach((button) => button.ad
   const s = simulation.state;
   if (action === 'traction-down') simulation.command('traction', Math.max(-8, s.traction - 1));
   else if (action === 'traction-zero') simulation.command('traction', 0);
-  else if (action === 'traction-up') simulation.command('traction', Math.min(7, s.traction + 1));
+  else if (action === 'traction-up') simulation.command('traction', Math.min(TRACTION_MAX, s.traction + 1));
   else if (action === 'auto-down') simulation.command('auto-brake', Math.max(0, s.autoBrake - 1));
   else if (action === 'auto-up') simulation.command('auto-brake', Math.min(5, s.autoBrake + 1));
   else if (action === 'independent-down') simulation.command('independent-brake', Math.max(0, s.independentBrake - 1));
