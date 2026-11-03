@@ -1,7 +1,6 @@
 import {
   LKJ_KEYS,
   absoluteKilometerAt,
-  lineLimitAt,
   lkjControlLimit,
   routeFacilitiesForScenario,
 } from './speedRegulationConfig.js';
@@ -23,7 +22,7 @@ const MENU = Object.freeze([
   ['return', '返回监控', '0'],
 ]);
 
-const CHART = Object.freeze({ left: 50, position: 190, right: 752, top: 60, bottom: 390, speedMaximum: 120, pixelsPerMeter: 0.14 });
+const CHART = Object.freeze({ left: 50, position: 190, right: 752, top: 60, bottom: 390, speedMaximum: 140, speedTick: 20, pixelsPerMeter: 0.14 });
 
 export class LkjRuntime {
   constructor(root, simulation) {
@@ -245,12 +244,20 @@ export class LkjRuntime {
 
   mainPage(s, scenario) {
     const controlPoints = [];
-    const linePoints = [];
     for (let distance = s.distance - 1000; distance <= s.distance + 4000; distance += 40) {
       const x = this.chartX(distance, s.distance);
       controlPoints.push(`${x.toFixed(1)},${this.speedY(lkjControlLimit(scenario, distance)).toFixed(1)}`);
-      linePoints.push(`${x.toFixed(1)},${this.speedY(lineLimitAt(scenario, distance)).toFixed(1)}`);
     }
+    const speedScale = Array.from({ length: CHART.speedMaximum / CHART.speedTick + 1 }, (_, index) => index * CHART.speedTick)
+      .map((speed) => {
+        const y = this.speedY(speed);
+        return `<g class="lkj-speed-tick"><line class="lkj-speed-grid" x1="${CHART.left}" y1="${y}" x2="${CHART.right}" y2="${y}"/><line x1="43" y1="${y}" x2="${CHART.left}" y2="${y}"/><text x="41" y="${y + 4}">${speed}</text></g>`;
+      }).join('');
+    const limitLabels = (scenario.controlTargets || []).map((target) => {
+      const x = this.chartX(target.distance, s.distance);
+      if (x < CHART.left || x > CHART.right) return '';
+      return `<text class="lkj-native-limit-value" x="${x + 5}" y="${this.speedY(target.speed) - 6}">${target.speed}</text>`;
+    }).join('');
     const speedSamples = [...s.samples];
     if (!speedSamples.length || speedSamples.at(-1).distance !== s.distance) speedSamples.push({ distance: s.distance, speed: s.speed });
     const speedPoints = speedSamples
@@ -275,7 +282,8 @@ export class LkjRuntime {
     const condition = this.conditionVisible ? `<aside class="lkj-native-equipment"><b>原边电流 <em>${fmt(s.tractionCurrent)} A</em></b><b>列车管压力 <em>${fmt(s.trainPipe)} kPa</em></b><b>制动缸压力1 <em>${fmt(s.brakeCylinder)} kPa</em></b><b>均衡风缸 <em>${fmt(s.equalizingReservoir)} kPa</em></b><b>网压 <em>${fmt(s.netVoltage / 100, 1)} kV</em></b><b>工况 <em>${s.traction > 0 ? `牵引${s.traction}级/${fmt(s.tractionTargetSpeed)}` : s.traction < 0 ? `电制${-s.traction}级` : '惰行'}</em></b><b>平衡速度 <em>${fmt(s.balanceSpeed)} km/h</em></b><b>通道速度 <em>${fmt(s.speed)}　${fmt(s.speed)}　${fmt(s.speed)}</em></b><small>按“确认”关闭</small></aside>` : '';
     const trainLength = Math.min(105, Math.max(12, scenario.lkj.carCount * 25 * CHART.pixelsPerMeter));
     return `<div class="lkj-native-monitor level-${s.lkjLevel}"><svg viewBox="0 0 800 615" preserveAspectRatio="none" aria-label="LKJ运行监控曲线">
-      <polyline class="lkj-native-line-limit" points="${linePoints.join(' ')}"/><polyline class="lkj-native-limit-line" points="${controlPoints.join(' ')}"/>
+      <rect class="lkj-speed-scale-bg" x="1" y="${CHART.top}" width="48" height="${CHART.bottom - CHART.top}"/>${speedScale}
+      <polyline class="lkj-native-limit-line" points="${controlPoints.join(' ')}"/>${limitLabels}
       ${signalMarkers}<line class="lkj-native-position-line" x1="${CHART.position}" y1="${CHART.top}" x2="${CHART.position}" y2="500"/>
       <polyline class="lkj-native-speed-line" points="${speedPoints}"/><polyline class="lkj-grade-line" points="${profile.gradePoints}"/><line class="lkj-grade-zero" x1="${CHART.left}" y1="411" x2="${CHART.right}" y2="411"/>
       <polyline class="lkj-curve-line" points="${profile.curvePoints}"/>${facilities}

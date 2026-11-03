@@ -2,7 +2,7 @@ import { CAB, PROJECT_ID, getScenario, lkjControlLimit, TRACTION_MAX } from './s
 import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261103-traction-block-signals-2';
 import { SpeedRegulationAssessment } from './speedRegulationAssessment.js?v=20261103-traction-block-signals-2';
 import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261103-traction-block-signals-2';
-import { LkjRuntime } from './lkjRuntime.js?v=20261103-traction-block-signals-2';
+import { LkjRuntime } from './lkjRuntime.js?v=20261103-lkj-curve-scale-1';
 import { CirRuntime } from './cirRuntime.js?v=20261103-traction-block-signals-2';
 import {
   clearCandidateDraft,

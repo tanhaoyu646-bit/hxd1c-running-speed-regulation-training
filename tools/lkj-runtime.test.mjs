@@ -16,7 +16,8 @@ test('LKJ固定显示后方1km与前方不少于4km', () => {
   const forward = (LKJ_CHART.right - LKJ_CHART.position) / LKJ_CHART.pixelsPerMeter;
   assert.ok(Math.abs(history - 1000) < 0.001);
   assert.ok(forward >= 4000);
-  assert.equal(LKJ_CHART.speedMaximum, 120);
+  assert.equal(LKJ_CHART.speedMaximum, 140);
+  assert.equal(LKJ_CHART.speedTick, 20);
 });
 
 test('LKJ查询顺序与数字快捷键保持一致', () => {
@@ -48,13 +49,15 @@ test('LKJ桥隧标记来自原线路累计里程并随技能起点换算', () =>
   assert.equal(tunnel.start, 6349);
 });
 
-test('LKJ不再使用140km/h错位标尺或只保留250个历史点', async () => {
+test('LKJ使用140km/h标尺余量并持续保留完整历史窗口', async () => {
   const source = await readFile(new URL('../scripts/lkjRuntime.js', import.meta.url), 'utf8');
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const css = await readFile(new URL('../styles/speed-regulation.css', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /slice\(-250\)/);
-  assert.doesNotMatch(source, /Math\.min\(140/);
-  assert.match(source, /lkj-native-line-limit/);
+  assert.match(source, /speedMaximum: 140/);
+  assert.match(source, /lkj-speed-scale-bg/);
+  assert.match(source, /lkj-native-limit-value/);
+  assert.doesNotMatch(source, /lkj-native-line-limit/);
   assert.match(source, /routeFacilitiesForScenario/);
   assert.match(html, /id="result-trace"/);
   assert.match(css, /body\.mobile-controls-enabled \.lkj-dock[^{]*\{[^}]*left:max\(2px,env\(safe-area-inset-left\)\)[^}]*width:min\(30vw/);
