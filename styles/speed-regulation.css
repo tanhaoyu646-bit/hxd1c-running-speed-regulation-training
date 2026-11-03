@@ -119,3 +119,26 @@ body.candidate-entry-active{overflow:hidden}
   body.mobile-controls-enabled .lkj-state-lamps span{font-size:clamp(3px,.8vh,5px);letter-spacing:-.04em}
   body.mobile-controls-enabled .lkj-close{width:11%;font-size:clamp(11px,2.2vh,15px)}
 }
+
+/* 坡道驾驶项目同源的机械冲动检测仪，放置在操纵台中部空白区域。 */
+.shock-stick{position:absolute;z-index:24;left:50%;top:74%;width:92px;height:76px;padding:0;border:0;background:transparent;color:#f4e0bc;transform:translateX(-50%);pointer-events:auto;touch-action:manipulation;filter:drop-shadow(0 4px 4px #000b)}
+.shock-rack{position:absolute;inset:0;display:block;transform:perspective(160px) rotateX(4deg)}
+.shock-rack b{--fall:0deg;position:absolute;z-index:2;bottom:20px;width:9px;height:51px;border:1px solid #8d602b;border-radius:1px 1px 0 0;background:linear-gradient(90deg,#9d6a31 0,#d7aa65 42%,#a16d34 100%);box-shadow:inset 1px 0 #e0b879,1px 2px 2px #0008;transform:rotate(var(--fall));transform-origin:50% 100%;transition:transform .3s ease}
+.shock-rack b:nth-of-type(1){left:13px}.shock-rack b:nth-of-type(2){left:25px}.shock-rack b:nth-of-type(3){left:37px}.shock-rack b:nth-of-type(4){left:49px}.shock-rack b:nth-of-type(5){left:61px}.shock-rack b:nth-of-type(6){left:73px}
+.shock-rack .rack-back,.shock-rack .rack-front{position:absolute;left:5px;width:82px;border:1px solid #795022;background:linear-gradient(#c08b4d,#96622e);box-shadow:inset 0 1px #e0b172}.shock-rack .rack-back{z-index:1;bottom:17px;height:13px;transform:skewX(-8deg)}.shock-rack .rack-front{z-index:4;bottom:5px;height:17px;transform:skewX(7deg)}
+.shock-rack .rack-slots{position:absolute;z-index:3;left:8px;bottom:14px;width:77px;height:12px;border:1px solid #805829;background:repeating-linear-gradient(90deg,#c18a4a 0 8px,#5f3c19 8px 11px,#b27a3e 11px 12px);transform:skewX(-8deg)}
+.shock-stick em{position:absolute;left:50%;bottom:-5px;translate:-50%;font-size:8px;font-style:normal;white-space:nowrap;text-shadow:0 1px 3px #000}
+.shock-stick[data-level="1"] .shock-rack b:nth-of-type(n+6),.shock-stick[data-level="2"] .shock-rack b:nth-of-type(n+5),.shock-stick[data-level="3"] .shock-rack b:nth-of-type(n+4),.shock-stick[data-level="4"] .shock-rack b:nth-of-type(n+3),.shock-stick[data-level="5"] .shock-rack b:nth-of-type(n+2),.shock-stick[data-level="6"] .shock-rack b{--fall:68deg}
+.shock-stick.fallen{filter:drop-shadow(0 0 6px #ff704fcc)}
+
+/* LKJ实迹速度线为绿色；右侧15格状态栏使用设备容器内的小字号，避免溢出。 */
+.lkj-native-speed-line{stroke:#20ed5b}
+.result-trace-head i.actual{background:#20ed5b}.result-actual-line{stroke:#20ed5b}
+.lkj-state-lamps{overflow:hidden}
+.lkj-state-lamps span{min-width:0;font-size:clamp(3px,.32vw,6px);line-height:.92;letter-spacing:-.06em}
+.result-categories div{gap:12px}.result-categories span{display:grid;gap:4px}.result-categories small{color:#86a8b6;font-size:10px;line-height:1.35}.result-categories b{white-space:nowrap}
+
+@media(orientation:landscape) and (max-height:620px){
+  body.mobile-controls-enabled .shock-stick{left:50%;top:70%;transform:translateX(-50%) scale(.72);transform-origin:50% 0}
+  body.mobile-controls-enabled .lkj-state-lamps span{font-size:clamp(2px,.62vh,4px);line-height:.9;letter-spacing:-.09em}
+}

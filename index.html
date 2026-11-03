@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#06131d">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23061925'/%3E%3Cpath d='M13 39h38M18 39V20h28v19M24 48l5-9m11 9-5-9' stroke='%2358d7ff' stroke-width='5' fill='none'/%3E%3Ccircle cx='25' cy='29' r='3' fill='%23f0c457'/%3E%3Ccircle cx='39' cy='29' r='3' fill='%23f0c457'/%3E%3C/svg%3E">
   <title>HXD1C 途中调速实操考评</title>
-  <link rel="stylesheet" href="./styles/speed-regulation.css?v=20261103-lkj-curve-scale-1">
+  <link rel="stylesheet" href="./styles/speed-regulation.css?v=20261103-scoring-catenary-1">
 </head>
 <body class="candidate-entry-active">
   <section id="candidate-gate" class="candidate-gate" role="dialog" aria-modal="true" aria-labelledby="candidate-title">
@@ -83,6 +83,15 @@
         <dl id="run-data"></dl>
       </aside>
 
+      <button type="button" id="shock-stick" class="shock-stick" aria-label="扶正冲动检测仪">
+        <span class="shock-rack" aria-hidden="true">
+          <i class="rack-back"></i>
+          <b></b><b></b><b></b><b></b><b></b><b></b>
+          <i class="rack-slots"></i><i class="rack-front"></i>
+        </span>
+        <em>冲动检测仪</em>
+      </button>
+
       <div id="status-strip" class="status-strip" aria-live="polite">
         <b id="skill-name">途中调速</b><span id="phase-name">准备开始</span><em id="status-message">仅考评模式</em>
       </div>
@@ -128,6 +137,6 @@
       </section>
     </section>
   </main>
-  <script type="module" src="./scripts/speedRegulationApp.js?v=20261103-flat-approach-1"></script>
+  <script type="module" src="./scripts/speedRegulationApp.js?v=20261103-scoring-catenary-1"></script>
 </body>
 </html>

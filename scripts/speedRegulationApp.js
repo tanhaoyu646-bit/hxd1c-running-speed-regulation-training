@@ -1,7 +1,7 @@
 import { CAB, PROJECT_ID, getScenario, lkjControlLimit, TRACTION_MAX } from './speedRegulationConfig.js';
-import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261103-flat-approach-1';
-import { SpeedRegulationAssessment } from './speedRegulationAssessment.js?v=20261103-traction-block-signals-2';
-import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261103-traction-block-signals-2';
+import { SpeedRegulationSimulation } from './speedRegulationSimulation.js?v=20261103-scoring-shock-1';
+import { SpeedRegulationAssessment } from './speedRegulationAssessment.js?v=20261103-scoring-shock-1';
+import { SpeedRegulationScene } from './speedRegulationScene.js?v=20261103-scoring-catenary-1';
 import { LkjRuntime } from './lkjRuntime.js?v=20261103-lkj-curve-scale-1';
 import { CirRuntime } from './cirRuntime.js?v=20261103-traction-block-signals-2';
 import {
@@ -408,6 +408,8 @@ function render() {
   elements.directionBadge.querySelector('span').textContent = s.direction === 'F' ? '前进位' : s.direction === 'R' ? '后退位' : '中立位';
   elements.sideRelease.classList.toggle('active', s.sideRelease);
   elements.sideRelease.querySelector('span').textContent = s.sideRelease ? '已单缓' : '未动作';
+  $('#shock-stick').dataset.level = String(Math.min(6, Math.max(s.shockStickFallen, Math.ceil(s.shockStickTilt / 15))));
+  $('#shock-stick').classList.toggle('fallen', s.shockStickTilt >= 70);
   setNeedle(elements.speedNeedle, s.speed, 158);
   setNeedle(elements.mainNeedle, s.mainReservoir, 1600);
   setNeedle(elements.pipeNeedle, s.trainPipe, 1000);
@@ -439,8 +441,8 @@ function render() {
 
 function renderProgress(progress) {
   const names = simulation.scenario.id === 'twoStage'
-    ? ['LKJ查看记录', '信号呼唤记录', '牵引回零记录', '单缓操作记录', '首次制动记录', '阶段缓解记录', '列车管充风记录', '第二次制动记录', '进站速度记录', '考评完成']
-    : ['LKJ查看记录', '信号呼唤记录', '牵引回零记录', '单缓操作记录', '制动操作记录', '进站速度记录', '考评完成'];
+    ? ['LKJ查看记录', `三架信号呼唤 ${progress.calloutDone}/${progress.calloutTotal}`, '首次制动前牵引回零', '首次制动单缓', '首次制动记录', '阶段缓解记录', '列车管充风记录', '第二次制动前回零并单缓', '第二次制动记录', '进站速度记录', '考评完成']
+    : ['LKJ查看记录', `三架信号呼唤 ${progress.calloutDone}/${progress.calloutTotal}`, '制动前牵引回零', '制动时单缓', '制动操作记录', '进站速度记录', '考评完成'];
   $('#progress-list').innerHTML = names.map((name, index) => `<li class="${progress.checks[index] ? 'done' : index === progress.current ? 'active' : 'pending'}"><b>${String(index + 1).padStart(2, '0')}</b><span>${name}</span><em>${progress.checks[index] ? '已记录' : index === progress.current ? '待记录' : '未到达'}</em></li>`).join('');
 }
 
@@ -448,7 +450,7 @@ function renderData(s) {
   const grade = Number(simulation.scenario.operatingGrade) || 0;
   const rows = [
     ['速度', `${s.speed.toFixed(1)} km/h`], ['加速度', `${s.acceleration.toFixed(3)} m/s²`], ['LKJ限速', `${s.lkjLimit.toFixed(0)} km/h`], ['运行距离', `${s.distance.toFixed(0)} m`], ['目标距离', `${Math.max(0, simulation.scenario.entryDistance - s.distance).toFixed(0)} m`],
-    ['总风缸', `${s.mainReservoir.toFixed(0)} kPa`], ['列车管', `${s.trainPipe.toFixed(0)} kPa`], ['列尾风压', `${s.tailPipe.toFixed(0)} kPa`], ['制动缸', `${s.brakeCylinder.toFixed(0)} kPa`], ['网压', `${(s.netVoltage / 100).toFixed(1)} kV`], ['牵引电流', `${s.tractionCurrent.toFixed(0)} A`], ['牵引力', `${(s.tractionForce / 1000).toFixed(0)} kN`], ['电制动力', `${(s.electricBrakeForce / 1000).toFixed(0)} kN`], ['考评坡度', `${grade >= 0 ? '+' : ''}${grade.toFixed(1)} ‰（平道）`], ['牵引手柄', s.traction > 0 ? `${s.traction} 级 / 给定 ${s.tractionTargetSpeed} km/h` : `${s.traction} 级`], ['估算平衡速度', `${s.balanceSpeed.toFixed(0)} km/h`], ['自阀', brakeNames[s.autoBrake]],
+    ['总风缸', `${s.mainReservoir.toFixed(0)} kPa`], ['列车管', `${s.trainPipe.toFixed(0)} kPa`], ['列尾风压', `${s.tailPipe.toFixed(0)} kPa`], ['制动缸', `${s.brakeCylinder.toFixed(0)} kPa`], ['网压', `${(s.netVoltage / 100).toFixed(1)} kV`], ['牵引电流', `${s.tractionCurrent.toFixed(0)} A`], ['牵引力', `${(s.tractionForce / 1000).toFixed(0)} kN`], ['电制动力', `${(s.electricBrakeForce / 1000).toFixed(0)} kN`], ['冲动指数', `${s.shockIndex.toFixed(0)}（最大 ${s.maxShockIndex.toFixed(0)}）`], ['考评坡度', `${grade >= 0 ? '+' : ''}${grade.toFixed(1)} ‰（平道）`], ['牵引手柄', s.traction > 0 ? `${s.traction} 级 / 给定 ${s.tractionTargetSpeed} km/h` : `${s.traction} 级`], ['估算平衡速度', `${s.balanceSpeed.toFixed(0)} km/h`], ['自阀', brakeNames[s.autoBrake]],
   ];
   $('#run-data').innerHTML = rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${value}</dd></div>`).join('');
 }
@@ -465,8 +467,8 @@ function showResult() {
   $('#result-grade').textContent = result.summary;
   $('.result-score').classList.toggle('fail', !result.qualified);
   $('#result-title').textContent = simulation.scenario.title;
-  $('#result-summary').textContent = `进站信号机通过速度 ${result.entrySpeed?.toFixed(1) ?? '—'} km/h，运行 ${result.distance.toFixed(0)} m，用时 ${result.duration.toFixed(0)} s。${result.redline ? '本次触发安全红线。' : ''}`;
-  $('#result-categories').innerHTML = result.categories.map((category) => `<div><span>${category.name}</span><b>${category.score}/${category.maximum}</b></div>`).join('');
+  $('#result-summary').textContent = `进站信号机通过速度 ${result.entrySpeed?.toFixed(1) ?? '—'} km/h，最大冲动指数 ${result.maxShock.toFixed(0)}，运行 ${result.distance.toFixed(0)} m，用时 ${result.duration.toFixed(0)} s。${result.redline ? '本次触发安全红线。' : ''}`;
+  $('#result-categories').innerHTML = result.categories.map((category) => `<div><span>${category.name}<small>${category.notes.length ? category.notes.join('；') : '符合要求'}</small></span><b>${category.score}/${category.maximum}</b></div>`).join('');
   renderResultTrace();
   $('#result-modal').classList.add('open');
   $('#result-modal').setAttribute('aria-hidden', 'false');
@@ -547,6 +549,7 @@ $('#callout').addEventListener('click', () => simulation.command('callout'));
 $('#progress-toggle').addEventListener('click', () => togglePanel($('#progress-panel')));
 $('#rules-toggle').addEventListener('click', () => togglePanel($('#rules-panel')));
 $('#data-toggle').addEventListener('click', () => togglePanel($('#data-panel')));
+$('#shock-stick').addEventListener('click', () => simulation.command('shock-reset'));
 $('#mobile-operations-toggle').addEventListener('click', () => {
   const open = !$('#mobile-operations').classList.contains('open');
   $('#mobile-operations').classList.toggle('open', open);

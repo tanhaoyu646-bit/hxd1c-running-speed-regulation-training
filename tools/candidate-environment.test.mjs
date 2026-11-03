@@ -60,6 +60,8 @@ test('途中调速连续重建本务线并保留原桥梁邻线，填写信息�
   assert.match(routeSource, /this\.isSpeedRegulation\s*\?\s*SPEED_REGULATION_ROUTE_RENDER_OPTIONS/);
   assert.match(routeSource, /String\(instance\.shape \|\| ''\)\.toLowerCase\(\)/);
   assert.match(routeSource, /String\(shape\.fileName \|\| ''\)\.toLowerCase\(\)/);
+  assert.match(routeSource, /\(this\.isLookout \|\| this\.isSpeedRegulation\) && \/\^SweGantry1/);
+  assert.match(routeSource, /else if \(this\.isSpeedRegulation\) this\.buildLookoutCatenaryRepairs\(sceneData\)/);
   assert.ok(scene.instances.some((instance) => instance.uid === 31 && instance.shape === 'A1t100mstrt.s'));
   assert.ok(scene.shapes['A1t100mStrt.s']);
   assert.match(appSource, /function preloadRouteScene\(\)/);

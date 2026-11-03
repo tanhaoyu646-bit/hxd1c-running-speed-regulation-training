@@ -29,6 +29,12 @@ export class SpeedRegulationSimulation extends EventTarget {
       distance: 0,
       speed: scenario.initialSpeed,
       acceleration: 0,
+      jerk: 0,
+      shockIndex: 0,
+      maxShockIndex: 0,
+      shockStickTilt: 0,
+      shockStickFallen: 0,
+      controlShock: 0,
       traction: scenario.initialTraction,
       tractionTargetSpeed: tractionTargetSpeed(scenario.initialTraction),
       balanceSpeed: 0,
@@ -75,6 +81,7 @@ export class SpeedRegulationSimulation extends EventTarget {
         traction: scenario.initialTraction,
       }],
     };
+    this.previousAcceleration = 0;
     this.lastSampleAt = -1;
     this.dispatchEvent(new CustomEvent('reset', { detail: this.state }));
     return this.state;
@@ -92,7 +99,7 @@ export class SpeedRegulationSimulation extends EventTarget {
     const s = this.state;
     if (s.completed) return false;
     if (s.status === 'ready' && type !== 'lkj-open') this.start();
-    const previous = { traction: s.traction, autoBrake: s.autoBrake, independentBrake: s.independentBrake };
+    const previous = { traction: s.traction, autoBrake: s.autoBrake, independentBrake: s.independentBrake, sideRelease: s.sideRelease };
     if (type === 'traction') {
       s.traction = clamp(Math.round(Number(value) || 0), -DYNAMIC_BRAKE_MAX, TRACTION_MAX);
       s.tractionTargetSpeed = tractionTargetSpeed(s.traction);
@@ -130,9 +137,26 @@ export class SpeedRegulationSimulation extends EventTarget {
       this.log('lkj-mark');
     } else if (type === 'lkj-patrol') {
       this.log('lkj-patrol');
+    } else if (type === 'shock-reset') {
+      s.shockStickTilt = 0;
+      s.shockStickFallen = 0;
+      this.log('shock-stick-reset', { retainedMaximum: s.maxShockIndex });
     } else return false;
     if (['traction', 'auto-brake', 'independent-brake', 'side-release'].includes(type)) {
-      this.log(type, { value: type === 'side-release' ? s.sideRelease : s[type === 'auto-brake' ? 'autoBrake' : type === 'independent-brake' ? 'independentBrake' : 'traction'], previous });
+      const key = type === 'auto-brake' ? 'autoBrake' : type === 'independent-brake' ? 'independentBrake' : type === 'side-release' ? 'sideRelease' : 'traction';
+      const before = type === 'side-release' ? Number(previous.sideRelease) : Number(previous[key]);
+      const after = type === 'side-release' ? Number(s.sideRelease) : Number(s[key]);
+      const step = Math.abs(after - before);
+      const impulse = type === 'auto-brake' ? step * 10
+        : type === 'traction' ? (s.traction === 0 ? Math.min(12, step * 2) : Math.min(28, step * 5))
+          : type === 'independent-brake' ? step * 6 : step * 3;
+      s.controlShock = clamp(s.controlShock + impulse, 0, 100);
+      this.log(type, {
+        value: type === 'side-release' ? s.sideRelease : s[key],
+        previous,
+        traction: s.traction,
+        sideRelease: s.sideRelease,
+      });
     }
     this.emitChange();
     return true;
@@ -197,7 +221,17 @@ export class SpeedRegulationSimulation extends EventTarget {
     const pneumaticForce = s.brakeCylinder * 1_200;
     const netForce = tractionForce - electricBrake - rollingResistance - pneumaticForce - gradeForce;
     const newAcceleration = netForce / mass;
+    const rawJerk = (newAcceleration - this.previousAcceleration) / Math.max(dt, .01);
     s.acceleration += (newAcceleration - s.acceleration) * (1 - Math.exp(-dt / 0.7));
+    s.jerk += (rawJerk - s.jerk) * (1 - Math.exp(-dt / .28));
+    s.controlShock *= Math.exp(-dt / 1.15);
+    s.shockIndex = clamp(Math.abs(s.jerk) * 24 + s.controlShock, 0, 100);
+    s.maxShockIndex = Math.max(s.maxShockIndex, s.shockIndex);
+    if (s.shockIndex > 35) {
+      s.shockStickTilt = Math.max(s.shockStickTilt, clamp((s.shockIndex - 35) / 65 * 88, 0, 88));
+      s.shockStickFallen = Math.max(s.shockStickFallen, Math.min(6, Math.ceil(s.shockStickTilt / 15)));
+    }
+    this.previousAcceleration = newAcceleration;
     s.speed = Math.max(0, s.speed + s.acceleration * dt * 3.6);
     s.distance += s.speed / 3.6 * dt;
     s.phase = phaseAt(this.scenario, s.distance);
@@ -210,7 +244,7 @@ export class SpeedRegulationSimulation extends EventTarget {
 
     if (s.elapsed - this.lastSampleAt >= 0.5) {
       this.lastSampleAt = s.elapsed;
-      s.samples.push({ elapsed: s.elapsed, distance: s.distance, speed: s.speed, lineLimit: s.lkjLineLimit, modeLimit: s.lkjModeLimit, limit: s.lkjLimit, pipe: s.trainPipe, brake: s.autoBrake, traction: s.traction, tractionTargetSpeed: s.tractionTargetSpeed, tractionForce: s.tractionForce, grade: s.grade });
+      s.samples.push({ elapsed: s.elapsed, distance: s.distance, speed: s.speed, lineLimit: s.lkjLineLimit, modeLimit: s.lkjModeLimit, limit: s.lkjLimit, pipe: s.trainPipe, brake: s.autoBrake, traction: s.traction, tractionTargetSpeed: s.tractionTargetSpeed, tractionForce: s.tractionForce, grade: s.grade, acceleration: s.acceleration, jerk: s.jerk, shockIndex: s.shockIndex });
       if (s.samples.length > 900) s.samples.shift();
     }
     if (s.entrySpeed == null && s.distance >= this.scenario.entryDistance) {

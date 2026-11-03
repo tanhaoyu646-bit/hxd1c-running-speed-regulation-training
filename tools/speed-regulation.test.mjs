@@ -14,12 +14,14 @@ function commonStart(simulation) {
 function runOneStage() {
   const simulation = new SpeedRegulationSimulation('oneStage');
   commonStart(simulation);
+  let lastSignal = simulation.state.signal.id;
   let sideReleased = false;
   let brakeApplied = false;
   let pressureAdded = false;
   let finalRelease = false;
   for (let index = 0; index < 12_000 && !simulation.state.completed; index += 1) {
     const state = simulation.state;
+    if (state.signal.id !== lastSignal && state.signal.id !== 'clear') { simulation.command('callout'); lastSignal = state.signal.id; }
     if (state.distance > 3300 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
     if (state.distance > 3400 && !brakeApplied) { simulation.command('auto-brake', 1); brakeApplied = true; }
     if (state.distance > 3800 && !pressureAdded) { simulation.command('auto-brake', 2); pressureAdded = true; }
@@ -33,6 +35,7 @@ function runOneStage() {
 function runTwoStage() {
   const simulation = new SpeedRegulationSimulation('twoStage');
   commonStart(simulation);
+  let lastSignal = simulation.state.signal.id;
   let sideReleased = false;
   let firstApplied = false;
   let firstReleased = false;
@@ -40,6 +43,7 @@ function runTwoStage() {
   let finalRelease = false;
   for (let index = 0; index < 20_000 && !simulation.state.completed; index += 1) {
     const state = simulation.state;
+    if (state.signal.id !== lastSignal && state.signal.id !== 'clear') { simulation.command('callout'); lastSignal = state.signal.id; }
     if (state.distance > 1300 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
     if (state.distance > 1400 && !firstApplied) { simulation.command('auto-brake', 1); firstApplied = true; }
     if (state.speed < 95 && firstApplied && !firstReleased) {
@@ -125,20 +129,38 @@ test('牵引级位按10 km/h一级给定目标速度，超过给定速度不输�
   assert.ok(outcomes.at(-1).current > outcomes[2].current);
 });
 
-test('考评进度只记录按顺序完成的操作', () => {
+test('考评进度按真实状态核对呼唤、回零、单缓和制动顺序', () => {
   const simulation = new SpeedRegulationSimulation('oneStage');
   const assessment = new SpeedRegulationAssessment(simulation);
   simulation.start();
   simulation.command('callout');
-  simulation.command('traction', 0);
-  assert.equal(assessment.progress().done, 0);
-  simulation.command('lkj-open');
-  assert.equal(assessment.progress().done, 1);
+  simulation.state.signal = SCENARIOS.oneStage.signals[1];
+  simulation.command('callout');
+  simulation.state.signal = SCENARIOS.oneStage.signals[2];
   simulation.command('callout');
   simulation.command('traction', 0);
   simulation.command('side-release', true);
   simulation.command('auto-brake', 1);
+  assert.equal(assessment.progress().done, 4);
+  simulation.command('lkj-open');
   assert.equal(assessment.progress().done, 5);
+});
+
+test('制动事件保存回零与单缓状态，冲动仪保留最大值且可扶正', () => {
+  const simulation = new SpeedRegulationSimulation('oneStage');
+  simulation.start();
+  simulation.command('traction', 0);
+  simulation.command('side-release', true);
+  simulation.command('auto-brake', 2);
+  const brake = simulation.state.events.find((event) => event.type === 'auto-brake');
+  assert.equal(brake.traction, 0);
+  assert.equal(brake.sideRelease, true);
+  for (let index = 0; index < 80; index += 1) simulation.tick(.05);
+  assert.ok(simulation.state.maxShockIndex > 0);
+  const maximum = simulation.state.maxShockIndex;
+  simulation.command('shock-reset');
+  assert.equal(simulation.state.shockStickFallen, 0);
+  assert.equal(simulation.state.maxShockIndex, maximum);
 });
 
 test('一段制动标准操作可在目标速度范围通过进站信号机', () => {

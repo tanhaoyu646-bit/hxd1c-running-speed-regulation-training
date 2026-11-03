@@ -190,6 +190,7 @@ export class MstsRouteScene {
       if (this.renderOptions.sourceDepartureSignal && !this.usesCustomSignals) this.buildSourceDepartureSignal(sceneData);
       if (!this.usesCustomSignals) this.buildSourceRouteSignalLights(sceneData);
       if (this.isLookout) this.buildLookoutTrainingScenery(sceneData, prefabData, repairAssetData);
+      else if (this.isSpeedRegulation) this.buildLookoutCatenaryRepairs(sceneData);
       this.ready = true;
       this.applyCamera();
       this.canvas.dispatchEvent(new CustomEvent('route-ready', {
@@ -507,11 +508,11 @@ export class MstsRouteScene {
         // 原接触网杆的对象原点位于原轨道中心，真正的杆柱约在局部 +X 3 m。
         // 主线中心线重建后，少数杆柱会侵入新线路。按实际杆柱位置做净空判断，
         // 将侵线杆记录下来，稍后沿最终中心线原位重建，而不是只删掉造成断档。
-        if (this.isLookout && /^SweGantry1\.s$/i.test(instance.shape || '')) {
+        if ((this.isLookout || this.isSpeedRegulation) && /^SweGantry1\.s$/i.test(instance.shape || '')) {
           const instancePosition = new THREE.Vector3().fromArray(instance.position);
           const instanceQuaternion = new THREE.Quaternion().fromArray(instance.quaternion).normalize();
           const mastPosition = new THREE.Vector3(3, 0, 0).applyQuaternion(instanceQuaternion).add(instancePosition);
-          const mastProjection = this.projectPointToPath(mastPosition.toArray(), LOOKOUT_TRAINING_CONFIG.finishDistance + 350);
+          const mastProjection = this.projectPointToPath(mastPosition.toArray(), corridorEnd);
           if (mastProjection
             && Math.abs(mastProjection.signedLateral) < 2.65
             && Math.abs(mastProjection.verticalOffset || 0) < 3) {
@@ -1530,7 +1531,7 @@ export class MstsRouteScene {
       .sort((a, b) => a - b);
     if (!distances.length) return;
     const root = new THREE.Group();
-    root.name = 'LOOKOUT_REALIGNED_CATENARY_MASTS';
+    root.name = 'REALIGNED_CATENARY_MASTS';
     distances.forEach((distance, index) => {
       const mast = this.createSourceShapeObject(sceneData, 'SweGantry1.s', `LOOKOUT_REALIGNED_MAST_${String(index + 1).padStart(2, '0')}`);
       if (!mast) return;

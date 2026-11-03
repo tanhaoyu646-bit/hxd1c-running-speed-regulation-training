@@ -1,5 +1,5 @@
 import * as THREE from '../lib/three/three.module.js';
-import { MstsRouteScene } from './mstsRouteScene.js?v=20261103-traction-block-signals-2';
+import { MstsRouteScene } from './mstsRouteScene.js?v=20261103-scoring-catenary-1';
 
 export class SpeedRegulationScene extends MstsRouteScene {
   constructor(canvas, scenario) {
