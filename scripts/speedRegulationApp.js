@@ -441,8 +441,8 @@ function render() {
 
 function renderProgress(progress) {
   const names = simulation.scenario.id === 'twoStage'
-    ? ['LKJ查看记录', `三架信号呼唤 ${progress.calloutDone}/${progress.calloutTotal}`, '首次制动前牵引回零', '首次制动单缓', '首次制动记录', '阶段缓解记录', '列车管充风记录', '第二次制动前回零并单缓', '第二次制动记录', '进站速度记录', '考评完成']
-    : ['LKJ查看记录', `三架信号呼唤 ${progress.calloutDone}/${progress.calloutTotal}`, '制动前牵引回零', '制动时单缓', '制动操作记录', '进站速度记录', '考评完成'];
+    ? ['LKJ查看记录', `三架信号呼唤 ${progress.calloutDone}/${progress.calloutTotal}`, '首次制动保持11级', '首次制动单缓', '首次制动记录', '稳定后退至9级', '阶段缓解记录', '列车管充风记录', '第二次制动保持9级并单缓', '第二次制动记录', '稳定后退至4级', '进站速度记录', '站内续行完成']
+    : ['LKJ查看记录', `三架信号呼唤 ${progress.calloutDone}/${progress.calloutTotal}`, '制动时保持11级', '制动时单缓', '制动操作记录', '稳定后退至4级', '进站速度记录', '站内续行完成'];
   $('#progress-list').innerHTML = names.map((name, index) => `<li class="${progress.checks[index] ? 'done' : index === progress.current ? 'active' : 'pending'}"><b>${String(index + 1).padStart(2, '0')}</b><span>${name}</span><em>${progress.checks[index] ? '已记录' : index === progress.current ? '待记录' : '未到达'}</em></li>`).join('');
 }
 

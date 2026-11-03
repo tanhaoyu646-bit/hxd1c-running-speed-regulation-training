@@ -163,7 +163,14 @@ export class SpeedRegulationSimulation extends EventTarget {
   }
 
   log(type, data = {}) {
-    this.state.events.push({ type, elapsed: this.state.elapsed, distance: this.state.distance, speed: this.state.speed, ...data });
+    this.state.events.push({
+      type,
+      elapsed: this.state.elapsed,
+      distance: this.state.distance,
+      speed: this.state.speed,
+      trainPipe: this.state.trainPipe,
+      ...data,
+    });
   }
 
   tick(dt) {
@@ -201,10 +208,14 @@ export class SpeedRegulationSimulation extends EventTarget {
     const speedError = s.tractionTargetSpeed - s.speed;
     const holdingForce = Math.max(0, rollingResistance + gradeForce);
     const controllerForce = holdingForce + speedError * mass * .0075;
+    // 常用空气制动初期按《操规》第46条保留受限牵引，电力机车牵引电流控制在
+    // 200 A以下；待制动作用稳定后，司机退至低于当前速度的目标级位，控制器
+    // 自然卸载。LKJ卸载、LKJ制动和紧急制动仍直接切断牵引输出。
+    const serviceBrakeTractionCap = s.autoBrake > 0 && s.autoBrake < 5 ? 60_000 : Infinity;
     // 主手柄正级位是目标速度给定。达到或超过该级位对应速度后切除牵引输出，
     // 低于目标时再按坡度、阻力、恒功率包络和黏着上限给出所需牵引力。
-    const tractionForce = s.traction > 0 && speedError > 0 && s.autoBrake === 0 && s.lkjForcedBrake === 0 && s.lkjLevel !== 'unload'
-      ? clamp(controllerForce, 0, tractionAuthority * tractionEnvelope)
+    const tractionForce = s.traction > 0 && speedError > 0 && s.autoBrake < 5 && s.lkjForcedBrake === 0 && s.lkjLevel !== 'unload'
+      ? clamp(controllerForce, 0, Math.min(tractionAuthority * tractionEnvelope, serviceBrakeTractionCap))
       : 0;
     const dynamicFraction = Math.abs(Math.min(0, s.traction)) / DYNAMIC_BRAKE_MAX;
     const lowSpeedBrakeFactor = clamp(s.speed / 15, 0, 1);
@@ -256,7 +267,7 @@ export class SpeedRegulationSimulation extends EventTarget {
         this.log('entry-overspeed', { limit: this.scenario.maximumEntrySpeed });
       }
     }
-    if (s.distance >= this.scenario.finishDistance || (s.entrySpeed != null && s.speed < 2)) {
+    if (s.distance >= this.scenario.finishDistance) {
       s.completed = true;
       s.status = 'completed';
       if (s.qualified == null) s.qualified = true;

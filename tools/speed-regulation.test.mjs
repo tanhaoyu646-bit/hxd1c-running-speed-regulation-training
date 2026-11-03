@@ -8,7 +8,6 @@ function commonStart(simulation) {
   simulation.start();
   simulation.command('lkj-open');
   simulation.command('callout');
-  simulation.command('traction', 0);
 }
 
 function runOneStage() {
@@ -18,14 +17,20 @@ function runOneStage() {
   let sideReleased = false;
   let brakeApplied = false;
   let pressureAdded = false;
+  let targetSelected = false;
   let finalRelease = false;
   for (let index = 0; index < 12_000 && !simulation.state.completed; index += 1) {
     const state = simulation.state;
     if (state.signal.id !== lastSignal && state.signal.id !== 'clear') { simulation.command('callout'); lastSignal = state.signal.id; }
-    if (state.distance > 3300 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
-    if (state.distance > 3400 && !brakeApplied) { simulation.command('auto-brake', 1); brakeApplied = true; }
-    if (state.distance > 3800 && !pressureAdded) { simulation.command('auto-brake', 2); pressureAdded = true; }
-    if (pressureAdded && state.speed < 65 && !finalRelease) { simulation.command('auto-brake', 0); finalRelease = true; }
+    if (state.distance > 2900 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
+    if (state.distance > 3000 && !brakeApplied) { simulation.command('auto-brake', 1); brakeApplied = true; }
+    const firstBrake = state.events.find((event) => event.type === 'auto-brake' && event.value > 0);
+    if (firstBrake && state.elapsed >= firstBrake.elapsed + 5.2 && !targetSelected) {
+      simulation.command('traction', 4);
+      targetSelected = true;
+    }
+    if (state.distance > 3200 && !pressureAdded) { simulation.command('auto-brake', 2); pressureAdded = true; }
+    if (pressureAdded && state.speed < 48 && !finalRelease) { simulation.command('auto-brake', 0); finalRelease = true; }
     if (state.lkjForcedBrake && state.lkjLevel === 'normal' && state.speed <= state.lkjLimit + 1) simulation.command('lkj-relief');
     simulation.tick(.05);
   }
@@ -39,24 +44,33 @@ function runTwoStage() {
   let sideReleased = false;
   let firstApplied = false;
   let firstReleased = false;
+  let firstTargetSelected = false;
   let secondApplied = false;
+  let finalTargetSelected = false;
   let finalRelease = false;
   for (let index = 0; index < 20_000 && !simulation.state.completed; index += 1) {
     const state = simulation.state;
     if (state.signal.id !== lastSignal && state.signal.id !== 'clear') { simulation.command('callout'); lastSignal = state.signal.id; }
     if (state.distance > 1300 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
     if (state.distance > 1400 && !firstApplied) { simulation.command('auto-brake', 1); firstApplied = true; }
+    const applications = state.events.filter((event) => event.type === 'auto-brake' && event.value > 0 && event.previous?.autoBrake === 0);
+    if (applications[0] && state.elapsed >= applications[0].elapsed + 5.2 && !firstTargetSelected) {
+      simulation.command('traction', 9);
+      firstTargetSelected = true;
+    }
     if (state.speed < 95 && firstApplied && !firstReleased) {
       simulation.command('auto-brake', 0);
-      simulation.command('traction', 2);
       firstReleased = true;
     }
     if (state.distance > 3300 && firstReleased && !secondApplied) {
-      simulation.command('traction', 0);
       simulation.command('auto-brake', 1);
       secondApplied = true;
     }
-    if (secondApplied && state.speed < 60 && !finalRelease) { simulation.command('auto-brake', 0); finalRelease = true; }
+    if (applications[1] && state.elapsed >= applications[1].elapsed + 5.2 && !finalTargetSelected) {
+      simulation.command('traction', 4);
+      finalTargetSelected = true;
+    }
+    if (secondApplied && state.speed < 55 && !finalRelease) { simulation.command('auto-brake', 0); finalRelease = true; }
     if (state.lkjForcedBrake && state.lkjLevel === 'normal' && state.speed <= state.lkjLimit + 1) simulation.command('lkj-relief');
     simulation.tick(.05);
   }
@@ -73,6 +87,10 @@ test('两个技能配置、里程和状态互相独立，并共用实际信号�
   assert.equal(SCENARIOS.twoStage.operatingGrade, 0);
   assert.equal(SCENARIOS.oneStage.entryDistance, 5000);
   assert.equal(SCENARIOS.twoStage.entryDistance, 5000);
+  assert.equal(SCENARIOS.oneStage.finishDistance, 5600);
+  assert.equal(SCENARIOS.twoStage.finishDistance, 5600);
+  assert.deepEqual(SCENARIOS.oneStage.brakeTargetNotches, [4]);
+  assert.deepEqual(SCENARIOS.twoStage.brakeTargetNotches, [9, 4]);
   assert.ok(SCENARIOS.oneStage.phases[0].end >= 1200);
   assert.ok(SCENARIOS.twoStage.phases[0].end >= 700);
   assert.equal(SCENARIOS.oneStage.startOffset + SCENARIOS.oneStage.entryDistance, SCENARIOS.twoStage.startOffset + SCENARIOS.twoStage.entryDistance);
@@ -129,7 +147,7 @@ test('牵引级位按10 km/h一级给定目标速度，超过给定速度不输�
   assert.ok(outcomes.at(-1).current > outcomes[2].current);
 });
 
-test('考评进度按真实状态核对呼唤、回零、单缓和制动顺序', () => {
+test('考评进度按真实状态核对呼唤、有级位制动、单缓和目标级位顺序', () => {
   const simulation = new SpeedRegulationSimulation('oneStage');
   const assessment = new SpeedRegulationAssessment(simulation);
   simulation.start();
@@ -138,24 +156,31 @@ test('考评进度按真实状态核对呼唤、回零、单缓和制动顺序',
   simulation.command('callout');
   simulation.state.signal = SCENARIOS.oneStage.signals[2];
   simulation.command('callout');
-  simulation.command('traction', 0);
   simulation.command('side-release', true);
   simulation.command('auto-brake', 1);
   assert.equal(assessment.progress().done, 4);
   simulation.command('lkj-open');
   assert.equal(assessment.progress().done, 5);
+  for (let index = 0; index < 110; index += 1) simulation.tick(.05);
+  simulation.command('traction', 4);
+  for (let index = 0; index < 12; index += 1) simulation.tick(.05);
+  assert.equal(assessment.progress().done, 6);
 });
 
-test('制动事件保存回零与单缓状态，冲动仪保留最大值且可扶正', () => {
+test('制动事件保存有级位与单缓状态，常用制动初期牵引电流限制在200A以下', () => {
   const simulation = new SpeedRegulationSimulation('oneStage');
   simulation.start();
-  simulation.command('traction', 0);
   simulation.command('side-release', true);
   simulation.command('auto-brake', 2);
   const brake = simulation.state.events.find((event) => event.type === 'auto-brake');
-  assert.equal(brake.traction, 0);
+  assert.equal(brake.traction, 11);
   assert.equal(brake.sideRelease, true);
   for (let index = 0; index < 80; index += 1) simulation.tick(.05);
+  assert.ok(simulation.state.tractionForce > 0);
+  assert.ok(simulation.state.tractionCurrent <= 200);
+  simulation.command('traction', 4);
+  for (let index = 0; index < 20; index += 1) simulation.tick(.05);
+  assert.equal(simulation.state.tractionForce, 0);
   assert.ok(simulation.state.maxShockIndex > 0);
   const maximum = simulation.state.maxShockIndex;
   simulation.command('shock-reset');

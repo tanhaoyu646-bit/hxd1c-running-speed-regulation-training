@@ -7,8 +7,17 @@ function brakeApplications(events) {
     && event.previous?.autoBrake === 0);
 }
 
-function preparedForBrake(event) {
-  return Boolean(event) && event.traction === 0 && event.sideRelease === true;
+function preparedForBrake(event, requiredNotch) {
+  return Boolean(event) && event.traction === requiredNotch && event.sideRelease === true;
+}
+
+// 《操规》第46条要求列车制动作用稳定降速（原则上5 s以上）后再解除牵引力。
+// 微课把HXD1C的后续手柄操作具体化为退至目标速度对应级位，因此以5 s后的
+// 连续运行样本核对目标级位，避免把制动瞬间直接跳级误判为规范操作。
+function targetNotchMaintained(state, brake, notch, beforeElapsed = Infinity) {
+  if (!brake) return false;
+  return state.samples.some((sample) => sample.elapsed >= brake.elapsed + 5
+    && sample.elapsed < beforeElapsed && sample.traction === notch);
 }
 
 function signalCallouts(events, scenario) {
@@ -27,20 +36,25 @@ export class SpeedRegulationAssessment {
     const applications = brakeApplications(events);
     const firstBrake = applications[0];
     const calls = signalCallouts(events, scenario);
-    const tractionZeroBeforeFirst = events.some((event) => event.type === 'traction' && event.value === 0
-      && (!firstBrake || event.elapsed <= firstBrake.elapsed));
+    const firstRelease = events.find((event) => event.type === 'auto-brake' && event.value === 0
+      && firstBrake && event.elapsed > firstBrake.elapsed);
+    const entryPass = events.find((event) => event.type === 'entry-pass');
+    const targetNotches = scenario.brakeTargetNotches || [4];
     const checks = [
       events.some((event) => event.type === 'lkj-open'),
       calls.every((item) => item.done),
-      tractionZeroBeforeFirst,
+      firstBrake?.traction === scenario.initialTraction,
       firstBrake?.sideRelease === true,
       Boolean(firstBrake),
     ];
     if (scenario.id === 'twoStage') {
-      const firstRelease = events.find((event) => event.type === 'auto-brake' && event.value === 0
-        && firstBrake && event.elapsed > firstBrake.elapsed);
+      const secondBrake = applications[1];
+      checks.push(targetNotchMaintained(state, firstBrake, targetNotches[0], firstRelease?.elapsed));
       checks.push(Boolean(firstRelease), events.some((event) => event.type === 'pipe-recharged'));
-      checks.push(preparedForBrake(applications[1]), Boolean(applications[1]));
+      checks.push(preparedForBrake(secondBrake, targetNotches[0]), Boolean(secondBrake));
+      checks.push(targetNotchMaintained(state, secondBrake, targetNotches[1], entryPass?.elapsed));
+    } else {
+      checks.push(targetNotchMaintained(state, firstBrake, targetNotches[0], entryPass?.elapsed));
     }
     checks.push(events.some((event) => event.type === 'entry-pass'));
     checks.push(events.some((event) => event.type === 'attempt-complete'));
@@ -82,9 +96,9 @@ export class SpeedRegulationAssessment {
 
     const preparationNotes = [];
     let preparation = 15;
-    if (!firstBrake || firstBrake.traction !== 0) {
+    if (!firstBrake || firstBrake.traction !== scenario.initialTraction) {
       preparation -= 8;
-      preparationNotes.push('首次空气制动前牵引手柄未回零');
+      preparationNotes.push(`首次空气制动时牵引手柄未保持${scenario.initialTraction}级`);
     }
     if (!firstBrake || firstBrake.sideRelease !== true) {
       preparation -= 7;
@@ -123,6 +137,8 @@ export class SpeedRegulationAssessment {
 
     const techniqueNotes = [];
     let technique = 20;
+    const targetNotches = scenario.brakeTargetNotches || [4];
+    const entryPass = events.find((event) => event.type === 'entry-pass');
     if (events.some((event) => event.type === 'auto-brake' && event.value >= 4)) {
       technique -= 6;
       techniqueNotes.push('出现常用Ⅳ或紧急级位');
@@ -135,7 +151,13 @@ export class SpeedRegulationAssessment {
       technique -= 4;
       techniqueNotes.push('一段制动中出现再次制动作用');
     }
+    if (scenario.id === 'oneStage'
+      && !targetNotchMaintained(state, firstBrake, targetNotches[0], entryPass?.elapsed)) {
+      technique -= 8;
+      techniqueNotes.push(`制动作用稳定后牵引主手柄未退至目标${targetNotches[0]}级`);
+    }
     if (scenario.id === 'twoStage') {
+      const firstRelease = releases.find((event) => firstBrake && event.elapsed > firstBrake.elapsed);
       const rechargeWindow = scenario.rechargeWindow || [1800, 3400];
       const recharge = state.samples.some((sample) => sample.distance > rechargeWindow[0]
         && sample.distance < rechargeWindow[1] && sample.pipe >= 590);
@@ -143,13 +165,21 @@ export class SpeedRegulationAssessment {
         technique -= 6;
         techniqueNotes.push('两段间列车管未充分充风');
       }
-      if (!secondBrake || secondBrake.traction !== 0) {
+      if (!targetNotchMaintained(state, firstBrake, targetNotches[0], firstRelease?.elapsed)) {
+        technique -= 4;
+        techniqueNotes.push(`第一次制动作用稳定后牵引主手柄未退至目标${targetNotches[0]}级`);
+      }
+      if (!secondBrake || secondBrake.traction !== targetNotches[0]) {
         technique -= 2;
-        techniqueNotes.push('第二次空气制动前牵引手柄未保持零位');
+        techniqueNotes.push(`第二次空气制动时牵引主手柄未保持${targetNotches[0]}级`);
       }
       if (!secondBrake || secondBrake.sideRelease !== true) {
         technique -= 2;
         techniqueNotes.push('第二次空气制动时未实施单缓');
+      }
+      if (!targetNotchMaintained(state, secondBrake, targetNotches[1], entryPass?.elapsed)) {
+        technique -= 4;
+        techniqueNotes.push(`第二次制动作用稳定后牵引主手柄未退至目标${targetNotches[1]}级`);
       }
     }
     const warning = events.some((event) => event.type === 'lkj-level' && event.to === 'warning');
