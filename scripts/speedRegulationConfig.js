@@ -3,9 +3,10 @@ export const PROJECT_ID = 'hxd1c-running-speed-regulation-v1';
 export const CAB = Object.freeze({ width: 640, height: 480 });
 
 // 与“坡道驾驶调速”项目保持同一主手柄给定逻辑：正级位对应目标速度，
-// 实际速度达到或超过该级位目标后不再输出牵引力；坡度和阻力决定实际平衡速度。
+// 实际速度达到或超过该级位目标后不再输出牵引力。
 export const TRACTION_MAX = 12;
 export const DYNAMIC_BRAKE_MAX = 8;
+export const TRAINING_GRADE_PERMILLE = 0;
 export const TRACTION_TARGET_SPEEDS = Object.freeze([0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]);
 
 export function tractionTargetSpeed(notch) {
@@ -45,7 +46,8 @@ export const SCENARIOS = Object.freeze({
     title: '途中一段制动调速',
     shortTitle: '一段制动',
     initialSpeed: 110,
-    initialTraction: 2,
+    initialTraction: 11,
+    operatingGrade: TRAINING_GRADE_PERMILLE,
     // 起点位于进站前第二架通过信号机外方，完整保留两个自动闭塞分区。
     startOffset: 23880,
     routeWindow: SPEED_ROUTE_WINDOW,
@@ -82,7 +84,8 @@ export const SCENARIOS = Object.freeze({
     title: '途中两段制动调速',
     shortTitle: '两段制动',
     initialSpeed: 110,
-    initialTraction: 2,
+    initialTraction: 11,
+    operatingGrade: TRAINING_GRADE_PERMILLE,
     // 同样从第二架通过信号机外方开始；两个技能共用同一组实际信号位置。
     startOffset: 23880,
     routeWindow: SPEED_ROUTE_WINDOW,

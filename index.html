@@ -71,6 +71,7 @@
         <div class="panel-head"><strong>考评说明</strong><button data-close-panel>×</button></div>
         <ul>
           <li>按实际乘务作业要求完成途中调速，全程不提供操作顺序提示。</li>
+          <li>本考评按 0‰ 平道动力学组织，不叠加原线路纵断面对速度的影响。</li>
           <li>LKJ 报警、卸载和制动均作用于本次列车运行状态。</li>
           <li>进站信号机处速度不得超过 45 km/h；触发监控常用或紧急制动按安全红线处理。</li>
           <li>普通失误记录扣分并继续运行，考评结束后统一显示评分明细。</li>
@@ -101,8 +102,8 @@
           <h1>途中调速考评</h1>
           <p>请选择考评技能。两个技能分别建立独立考评记录，不提供教学模式与步骤提示。</p>
           <div class="skill-grid">
-            <button type="button" data-scenario="oneStage"><b>途中一段制动调速</b><span>初速 110 km/h · 两个闭塞分区后进站</span><em>开始考评</em></button>
-            <button type="button" data-scenario="twoStage"><b>途中两段制动调速</b><span>初速 110 km/h · 距进站信号机约 5 km</span><em>开始考评</em></button>
+            <button type="button" data-scenario="oneStage"><b>途中一段制动调速</b><span>平道 · 初速 110 km/h · 两个闭塞分区后进站</span><em>开始考评</em></button>
+            <button type="button" data-scenario="twoStage"><b>途中两段制动调速</b><span>平道 · 初速 110 km/h · 距进站信号机约 5 km</span><em>开始考评</em></button>
           </div>
           <small>项目数据仅保存在本项目浏览器空间，不读取或写入其他训练项目。</small>
         </div>
@@ -127,6 +128,6 @@
       </section>
     </section>
   </main>
-  <script type="module" src="./scripts/speedRegulationApp.js?v=20261103-lkj-curve-scale-1"></script>
+  <script type="module" src="./scripts/speedRegulationApp.js?v=20261103-flat-approach-1"></script>
 </body>
 </html>

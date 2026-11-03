@@ -47,7 +47,7 @@ export class SpeedRegulationSimulation extends EventTarget {
       tractionCurrent: 0,
       tractionForce: 0,
       electricBrakeForce: 0,
-      grade: 0,
+      grade: scenario.operatingGrade ?? 0,
       signal: signalAt(scenario, 0),
       phase: phaseAt(scenario, 0),
       lkjLineLimit: initialLkjCurves.lineLimit,
@@ -146,6 +146,8 @@ export class SpeedRegulationSimulation extends EventTarget {
     const s = this.state;
     if (s.status !== 'running' || s.completed) return;
     dt = clamp(Number(dt) || 0, 0, 0.08);
+    // 途中一段、两段制动考评统一按平道组织，隔离原线路纵断面对速度的干扰。
+    s.grade = Number(this.scenario.operatingGrade) || 0;
     s.elapsed += dt;
     const requestedReduction = BRAKE_POSITIONS[Math.max(s.autoBrake, s.lkjForcedBrake)]?.reduction || 0;
     const targetPipe = Math.max(0, 600 - requestedReduction);

@@ -63,6 +63,10 @@ test('两个技能配置、里程和状态互相独立，并共用实际信号�
   assert.notEqual(SCENARIOS.oneStage, SCENARIOS.twoStage);
   assert.equal(SCENARIOS.oneStage.initialSpeed, 110);
   assert.equal(SCENARIOS.twoStage.initialSpeed, 110);
+  assert.equal(SCENARIOS.oneStage.initialTraction, 11);
+  assert.equal(SCENARIOS.twoStage.initialTraction, 11);
+  assert.equal(SCENARIOS.oneStage.operatingGrade, 0);
+  assert.equal(SCENARIOS.twoStage.operatingGrade, 0);
   assert.equal(SCENARIOS.oneStage.entryDistance, 5000);
   assert.equal(SCENARIOS.twoStage.entryDistance, 5000);
   assert.ok(SCENARIOS.oneStage.phases[0].end >= 1200);
@@ -72,32 +76,25 @@ test('两个技能配置、里程和状态互相独立，并共用实际信号�
   const first = new SpeedRegulationSimulation('oneStage');
   const second = new SpeedRegulationSimulation('twoStage');
   first.command('traction', 0);
-  assert.equal(second.state.traction, 2);
+  assert.equal(second.state.traction, SCENARIOS.twoStage.initialTraction);
   assert.ok(lkjControlLimit(SCENARIOS.oneStage, 3900) < lkjControlLimit(SCENARIOS.oneStage, 200));
 });
 
-test('坡度进入动力学，网压电流与风压指针使用实时状态', () => {
-  const downhill = new SpeedRegulationSimulation('oneStage');
-  const uphill = new SpeedRegulationSimulation('oneStage');
-  for (const simulation of [downhill, uphill]) {
-    simulation.state.speed = 60;
-    simulation.command('traction', 0);
-    simulation.start();
-  }
-  downhill.state.grade = -20;
-  uphill.state.grade = 20;
-  for (let index = 0; index < 100; index += 1) { downhill.tick(.05); uphill.tick(.05); }
-  assert.ok(downhill.state.speed > uphill.state.speed + 5);
-  downhill.command('traction', 8);
-  for (let index = 0; index < 40; index += 1) downhill.tick(.05);
-  assert.ok(downhill.state.tractionCurrent > 100);
-  assert.ok(downhill.state.netVoltage < 2500);
-  downhill.command('traction', 0);
-  downhill.command('auto-brake', 2);
-  for (let index = 0; index < 100; index += 1) downhill.tick(.05);
-  assert.ok(downhill.state.trainPipe < 600);
-  assert.ok(downhill.state.brakeCylinder > 0);
-  assert.ok(downhill.state.mainReservoir < 900);
+test('途中调速固定按平道运行，网压电流与风压指针使用实时状态', () => {
+  const simulation = new SpeedRegulationSimulation('oneStage');
+  simulation.state.grade = 20;
+  simulation.start();
+  for (let index = 0; index < 100; index += 1) simulation.tick(.05);
+  assert.equal(simulation.state.grade, 0);
+  assert.ok(Math.abs(simulation.state.speed - 110) < 0.4);
+  assert.ok(simulation.state.tractionCurrent > 100);
+  assert.ok(simulation.state.netVoltage < 2500);
+  simulation.command('traction', 0);
+  simulation.command('auto-brake', 2);
+  for (let index = 0; index < 100; index += 1) simulation.tick(.05);
+  assert.ok(simulation.state.trainPipe < 600);
+  assert.ok(simulation.state.brakeCylinder > 0);
+  assert.ok(simulation.state.mainReservoir < 900);
 });
 
 test('牵引级位按10 km/h一级给定目标速度，超过给定速度不输出动力', () => {
