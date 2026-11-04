@@ -11,6 +11,26 @@ function preparedForBrake(event, requiredNotch) {
   return Boolean(event) && event.traction === requiredNotch && event.sideRelease === true;
 }
 
+function brakeWindow(scenario, index) {
+  const definition = scenario.brakeWindows?.[index];
+  if (!definition) return null;
+  const signal = scenario.signals.find((item) => item.id === definition.signalId);
+  if (!signal) return null;
+  return {
+    ...definition,
+    signal,
+    start: signal.distance + definition.offsetMin,
+    end: signal.distance + definition.offsetMax,
+  };
+}
+
+function actualPositionText(event, window) {
+  const offset = Math.round(event.distance - window.signal.distance);
+  return offset >= 0
+    ? `实际通过${window.signal.label}后${offset} m`
+    : `实际距${window.signal.label}${Math.abs(offset)} m`;
+}
+
 // 《操规》第46条要求列车制动作用稳定降速（原则上5 s以上）后再解除牵引力。
 // 微课把HXD1C的后续手柄操作具体化为退至目标速度对应级位，因此以5 s后的
 // 连续运行样本核对目标级位，避免把制动瞬间直接跳级误判为规范操作。
@@ -77,7 +97,8 @@ export class SpeedRegulationAssessment {
     const secondBrake = applications[1];
     const releases = events.filter((event) => event.type === 'auto-brake' && event.value === 0);
     const calls = signalCallouts(events, scenario);
-    const safetyEvents = events.filter((event) => event.type === 'entry-overspeed'
+    const safetyEvents = events.filter((event) => event.type === 'limit-line-exceeded'
+      || event.type === 'entry-overspeed'
       || (event.type === 'lkj-level' && ['service', 'emergency'].includes(event.to))
       || event.type === 'direction-while-moving');
 
@@ -111,27 +132,30 @@ export class SpeedRegulationAssessment {
       timing = 0;
       timingNotes.push('未形成有效制动作用');
     } else if (scenario.id === 'oneStage') {
-      if (!between(firstBrake.distance, 2950, 3650)) {
+      const window = brakeWindow(scenario, 0);
+      if (!window || !between(firstBrake.distance, window.start, window.end)) {
         timing -= 12;
-        timingNotes.push('一段制动时机超出2950—3650 m考核窗');
+        timingNotes.push(window ? `一段制动时机超出“${window.label}”考核窗（${actualPositionText(firstBrake, window)}）` : '一段制动考核窗配置缺失');
       }
       if (!between(firstBrake.value, 1, 2)) {
         timing -= 8;
         timingNotes.push('初次减压级位不符合初制至常用Ⅱ');
       }
     } else {
-      if (!between(firstBrake.distance, 1050, 1800)) {
+      const firstWindow = brakeWindow(scenario, 0);
+      const secondWindow = brakeWindow(scenario, 1);
+      if (!firstWindow || !between(firstBrake.distance, firstWindow.start, firstWindow.end)) {
         timing -= 6;
-        timingNotes.push('第一段制动时机超出1050—1800 m考核窗');
+        timingNotes.push(firstWindow ? `第一段制动时机超出“${firstWindow.label}”考核窗（${actualPositionText(firstBrake, firstWindow)}）` : '第一段制动考核窗配置缺失');
       }
       const firstRelease = releases.find((event) => event.elapsed > firstBrake.elapsed);
       if (!firstRelease || !between(firstRelease.speed, 86, 97)) {
         timing -= 6;
         timingNotes.push('第一段缓解速度不在86—97 km/h');
       }
-      if (!secondBrake || !between(secondBrake.distance, 3300, 4050)) {
+      if (!secondBrake || !secondWindow || !between(secondBrake.distance, secondWindow.start, secondWindow.end)) {
         timing -= 8;
-        timingNotes.push('第二段制动时机超出3300—4050 m考核窗');
+        timingNotes.push(!secondBrake ? '未形成第二次有效制动作用' : secondWindow ? `第二段制动时机超出“${secondWindow.label}”考核窗（${actualPositionText(secondBrake, secondWindow)}）` : '第二段制动考核窗配置缺失');
       }
     }
 
@@ -158,9 +182,10 @@ export class SpeedRegulationAssessment {
     }
     if (scenario.id === 'twoStage') {
       const firstRelease = releases.find((event) => firstBrake && event.elapsed > firstBrake.elapsed);
-      const rechargeWindow = scenario.rechargeWindow || [1800, 3400];
-      const recharge = state.samples.some((sample) => sample.distance > rechargeWindow[0]
-        && sample.distance < rechargeWindow[1] && sample.pipe >= 590);
+      const rechargeEvent = events.find((event) => event.type === 'pipe-recharged'
+        && firstRelease && event.elapsed > firstRelease.elapsed
+        && (!secondBrake || event.elapsed < secondBrake.elapsed));
+      const recharge = Boolean(rechargeEvent);
       if (!recharge) {
         technique -= 6;
         techniqueNotes.push('两段间列车管未充分充风');
@@ -235,7 +260,9 @@ export class SpeedRegulationAssessment {
     return {
       score, qualified, redline, sequenceComplete, categories,
       entrySpeed: state.entrySpeed, duration: state.elapsed, distance: state.distance, maxShock,
-      summary: qualified ? '考评合格' : !sequenceComplete ? '考评不合格：规定操作记录未完成' : '考评不合格',
+      summary: qualified ? '考评合格'
+        : events.some((event) => event.type === 'limit-line-exceeded') ? '考评终止：越过LKJ限速线'
+          : !sequenceComplete ? '考评不合格：规定操作记录未完成' : '考评不合格',
       safetyEvents, finalEvent: last(events),
     };
   }

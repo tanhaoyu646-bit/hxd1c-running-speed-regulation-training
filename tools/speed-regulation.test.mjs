@@ -22,14 +22,14 @@ function runOneStage() {
   for (let index = 0; index < 12_000 && !simulation.state.completed; index += 1) {
     const state = simulation.state;
     if (state.signal.id !== lastSignal && state.signal.id !== 'clear') { simulation.command('callout'); lastSignal = state.signal.id; }
-    if (state.distance > 2900 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
-    if (state.distance > 3000 && !brakeApplied) { simulation.command('auto-brake', 1); brakeApplied = true; }
+    if (state.distance > 1850 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
+    if (state.distance > 1950 && !brakeApplied) { simulation.command('auto-brake', 1); brakeApplied = true; }
     const firstBrake = state.events.find((event) => event.type === 'auto-brake' && event.value > 0);
     if (firstBrake && state.elapsed >= firstBrake.elapsed + 5.2 && !targetSelected) {
       simulation.command('traction', 4);
       targetSelected = true;
     }
-    if (state.distance > 3200 && !pressureAdded) { simulation.command('auto-brake', 2); pressureAdded = true; }
+    if (state.distance > 2200 && !pressureAdded) { simulation.command('auto-brake', 2); pressureAdded = true; }
     if (pressureAdded && state.speed < 48 && !finalRelease) { simulation.command('auto-brake', 0); finalRelease = true; }
     if (state.lkjForcedBrake && state.lkjLevel === 'normal' && state.speed <= state.lkjLimit + 1) simulation.command('lkj-relief');
     simulation.tick(.05);
@@ -91,6 +91,13 @@ test('两个技能配置、里程和状态互相独立，并共用实际信号�
   assert.equal(SCENARIOS.twoStage.finishDistance, 5600);
   assert.deepEqual(SCENARIOS.oneStage.brakeTargetNotches, [4]);
   assert.deepEqual(SCENARIOS.twoStage.brakeTargetNotches, [9, 4]);
+  assert.deepEqual(SCENARIOS.oneStage.brakeWindows.map(({ signalId, offsetMin, offsetMax }) => ({ signalId, offsetMin, offsetMax })), [
+    { signalId: 'second-through', offsetMin: 550, offsetMax: 750 },
+  ]);
+  assert.deepEqual(SCENARIOS.twoStage.brakeWindows.map(({ signalId, offsetMin, offsetMax }) => ({ signalId, offsetMin, offsetMax })), [
+    { signalId: 'second-through', offsetMin: 0, offsetMax: 200 },
+    { signalId: 'first-through', offsetMin: -240, offsetMax: -40 },
+  ]);
   assert.ok(SCENARIOS.oneStage.phases[0].end >= 1200);
   assert.ok(SCENARIOS.twoStage.phases[0].end >= 700);
   assert.equal(SCENARIOS.oneStage.startOffset + SCENARIOS.oneStage.entryDistance, SCENARIOS.twoStage.startOffset + SCENARIOS.twoStage.entryDistance);
@@ -202,21 +209,37 @@ test('两段制动包含缓解充风和第二次50kPa减压', () => {
   const result = new SpeedRegulationAssessment(simulation).result();
   const applications = simulation.state.events.filter((event) => event.type === 'auto-brake' && event.value > 0 && event.previous?.autoBrake === 0);
   assert.equal(simulation.state.completed, true);
-  assert.ok(simulation.state.samples.some((sample) => sample.distance > SCENARIOS.twoStage.rechargeWindow[0] && sample.distance < SCENARIOS.twoStage.rechargeWindow[1] && sample.pipe >= 590));
+  const recharge = simulation.state.events.find((event) => event.type === 'pipe-recharged');
+  const firstRelease = simulation.state.events.find((event) => event.type === 'auto-brake' && event.value === 0);
+  assert.ok(recharge && firstRelease && recharge.elapsed > firstRelease.elapsed);
   assert.equal(applications.length, 2);
   assert.ok(simulation.state.entrySpeed <= 45, `entry speed ${simulation.state.entrySpeed}`);
   assert.equal(result.qualified, true);
 });
 
-test('未制动超速会触发LKJ制动并判为安全红线', () => {
+test('越过LKJ限速线持续0.5秒会立即终止并判为安全红线', () => {
   const simulation = new SpeedRegulationSimulation('oneStage');
   simulation.start();
   simulation.command('traction', 12);
-  for (let index = 0; index < 12_000 && !simulation.state.completed && simulation.state.distance < 4800; index += 1) simulation.tick(.05);
-  assert.ok(simulation.state.events.some((event) => event.type === 'lkj-level' && ['service', 'emergency'].includes(event.to)));
-  if (simulation.state.entrySpeed != null) {
-    const result = new SpeedRegulationAssessment(simulation).result();
-    assert.equal(result.redline, true);
-    assert.equal(result.qualified, false);
-  }
+  for (let index = 0; index < 12_000 && !simulation.state.completed; index += 1) simulation.tick(.05);
+  assert.equal(simulation.state.completed, true);
+  assert.ok(simulation.state.events.some((event) => event.type === 'limit-line-exceeded'));
+  const result = new SpeedRegulationAssessment(simulation).result();
+  assert.equal(result.redline, true);
+  assert.equal(result.qualified, false);
+  assert.equal(result.summary, '考评终止：越过LKJ限速线');
+});
+
+test('两段制动在第一次缓解前不会误记列车管充分充风', () => {
+  const simulation = new SpeedRegulationSimulation('twoStage');
+  simulation.start();
+  simulation.state.distance = 2500;
+  for (let index = 0; index < 20; index += 1) simulation.tick(.05);
+  assert.equal(simulation.state.events.some((event) => event.type === 'pipe-recharged'), false);
+  simulation.command('side-release', true);
+  simulation.command('auto-brake', 1);
+  for (let index = 0; index < 240; index += 1) simulation.tick(.05);
+  simulation.command('auto-brake', 0);
+  for (let index = 0; index < 800 && !simulation.state.pipeRechargeRecorded; index += 1) simulation.tick(.05);
+  assert.equal(simulation.state.events.some((event) => event.type === 'pipe-recharged'), true);
 });

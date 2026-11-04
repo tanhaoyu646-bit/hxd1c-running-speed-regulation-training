@@ -62,6 +62,7 @@ export class SpeedRegulationSimulation extends EventTarget {
       lkjLevel: 'normal',
       lkjAcknowledged: true,
       lkjForcedBrake: 0,
+      lkjLimitExcessDuration: 0,
       lkjOpenCount: 0,
       hornActive: false,
       calloutCount: 0,
@@ -185,8 +186,13 @@ export class SpeedRegulationSimulation extends EventTarget {
     const pipeTau = targetPipe < s.trainPipe ? 6.6 : 14.0;
     s.trainPipe += (targetPipe - s.trainPipe) * (1 - Math.exp(-dt / pipeTau));
     s.tailPipe += (s.trainPipe - s.tailPipe) * (1 - Math.exp(-dt / 2.2));
-    const rechargeWindow = this.scenario.rechargeWindow || [1800, 3400];
-    if (s.autoBrake === 0 && s.trainPipe >= 590 && s.distance > rechargeWindow[0] && s.distance < rechargeWindow[1] && !s.pipeRechargeRecorded) {
+    const brakeApplications = s.events.filter((event) => event.type === 'auto-brake' && event.value > 0 && event.previous?.autoBrake === 0);
+    const firstBrake = brakeApplications[0];
+    const secondBrake = brakeApplications[1];
+    const firstRelease = s.events.find((event) => event.type === 'auto-brake' && event.value === 0
+      && firstBrake && event.elapsed > firstBrake.elapsed);
+    if (firstRelease && !secondBrake && s.elapsed > firstRelease.elapsed && s.autoBrake === 0
+      && s.trainPipe >= 590 && !s.pipeRechargeRecorded) {
       s.pipeRechargeRecorded = true;
       this.log('pipe-recharged', { pipe: s.trainPipe });
     }
@@ -252,6 +258,8 @@ export class SpeedRegulationSimulation extends EventTarget {
     s.lkjModeLimit = lkjCurves.modeLimit;
     s.lkjLimit = lkjCurves.activeLimit;
     this.updateLkjProtection();
+    const lkjExcess = s.speed - s.lkjLimit;
+    s.lkjLimitExcessDuration = lkjExcess > 0.5 ? s.lkjLimitExcessDuration + dt : 0;
 
     if (s.elapsed - this.lastSampleAt >= 0.5) {
       this.lastSampleAt = s.elapsed;
@@ -267,7 +275,18 @@ export class SpeedRegulationSimulation extends EventTarget {
         this.log('entry-overspeed', { limit: this.scenario.maximumEntrySpeed });
       }
     }
-    if (s.distance >= this.scenario.finishDistance) {
+    // 数值抖动容差为0.5 km/h、持续0.5 s；达到后即按越过LKJ限速线终止考评。
+    // 容差只用于滤除离散积分误差，不构成允许超速范围。
+    if (!s.completed && s.lkjLimitExcessDuration >= 0.5) {
+      s.qualified = false;
+      s.lkjForcedBrake = 5;
+      s.completed = true;
+      s.status = 'completed';
+      this.log('limit-line-exceeded', { limit: s.lkjLimit, excess: lkjExcess });
+      this.log('attempt-complete', { reason: 'limit-line-exceeded' });
+      this.dispatchEvent(new CustomEvent('complete', { detail: s }));
+    }
+    if (!s.completed && s.distance >= this.scenario.finishDistance) {
       s.completed = true;
       s.status = 'completed';
       if (s.qualified == null) s.qualified = true;

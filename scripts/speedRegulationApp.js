@@ -428,7 +428,9 @@ function render() {
   frame(elements.pantograph, 1, 1, 2);
   $('#phase-name').textContent = s.phase?.label || '考评区段';
   const levelText = { normal: '监控正常', warning: 'LKJ报警', unload: 'LKJ卸载', service: 'LKJ常用制动', emergency: 'LKJ紧急制动' }[s.lkjLevel];
-  $('#status-message').textContent = `${levelText} · 距进站信号 ${Math.max(0, scenario.entryDistance - s.distance).toFixed(0)} m`;
+  const nextSignalDistance = Math.max(0, (s.signal.distance || s.distance) - s.distance);
+  const nextSignalText = s.signal.id === 'clear' ? '已通过进站信号机' : `距${s.signal.label} ${nextSignalDistance.toFixed(0)} m`;
+  $('#status-message').textContent = `${levelText} · ${nextSignalText}`;
   const progress = assessment.progress(s);
   $('#progress-count').textContent = `${progress.done}/${progress.total}`;
   renderProgress(progress);
@@ -449,7 +451,7 @@ function renderProgress(progress) {
 function renderData(s) {
   const grade = Number(simulation.scenario.operatingGrade) || 0;
   const rows = [
-    ['速度', `${s.speed.toFixed(1)} km/h`], ['加速度', `${s.acceleration.toFixed(3)} m/s²`], ['LKJ限速', `${s.lkjLimit.toFixed(0)} km/h`], ['运行距离', `${s.distance.toFixed(0)} m`], ['目标距离', `${Math.max(0, simulation.scenario.entryDistance - s.distance).toFixed(0)} m`],
+    ['速度', `${s.speed.toFixed(1)} km/h`], ['加速度', `${s.acceleration.toFixed(3)} m/s²`], ['LKJ限速', `${s.lkjLimit.toFixed(0)} km/h`], ['运行距离', `${s.distance.toFixed(0)} m`], ['距进站信号', `${Math.max(0, simulation.scenario.entryDistance - s.distance).toFixed(0)} m`], ['下一信号', s.signal.label], ['距下一信号', `${Math.max(0, (s.signal.distance || s.distance) - s.distance).toFixed(0)} m`],
     ['总风缸', `${s.mainReservoir.toFixed(0)} kPa`], ['列车管', `${s.trainPipe.toFixed(0)} kPa`], ['列尾风压', `${s.tailPipe.toFixed(0)} kPa`], ['制动缸', `${s.brakeCylinder.toFixed(0)} kPa`], ['网压', `${(s.netVoltage / 100).toFixed(1)} kV`], ['牵引电流', `${s.tractionCurrent.toFixed(0)} A`], ['牵引力', `${(s.tractionForce / 1000).toFixed(0)} kN`], ['电制动力', `${(s.electricBrakeForce / 1000).toFixed(0)} kN`], ['冲动指数', `${s.shockIndex.toFixed(0)}（最大 ${s.maxShockIndex.toFixed(0)}）`], ['考评坡度', `${grade >= 0 ? '+' : ''}${grade.toFixed(1)} ‰（平道）`], ['牵引手柄', s.traction > 0 ? `${s.traction} 级 / 给定 ${s.tractionTargetSpeed} km/h` : `${s.traction} 级`], ['估算平衡速度', `${s.balanceSpeed.toFixed(0)} km/h`], ['自阀', brakeNames[s.autoBrake]],
   ];
   $('#run-data').innerHTML = rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${value}</dd></div>`).join('');
