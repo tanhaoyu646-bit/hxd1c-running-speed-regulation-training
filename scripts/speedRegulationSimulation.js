@@ -147,6 +147,9 @@ export class SpeedRegulationSimulation extends EventTarget {
       const key = type === 'auto-brake' ? 'autoBrake' : type === 'independent-brake' ? 'independentBrake' : type === 'side-release' ? 'sideRelease' : 'traction';
       const before = type === 'side-release' ? Number(previous.sideRelease) : Number(previous[key]);
       const after = type === 'side-release' ? Number(s.sideRelease) : Number(s[key]);
+      // 拖动手柄时 pointermove 会重复发送同一离散级位。级位未变化不属于一次操纵，
+      // 不记录事件，也不计入冲动或评分，避免不同设备采样频率造成误扣分。
+      if (before === after) return false;
       const step = Math.abs(after - before);
       const impulse = type === 'auto-brake' ? step * 10
         : type === 'traction' ? (s.traction === 0 ? Math.min(12, step * 2) : Math.min(28, step * 5))

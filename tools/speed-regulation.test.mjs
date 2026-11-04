@@ -195,6 +195,29 @@ test('制动事件保存有级位与单缓状态，常用制动初期牵引电�
   assert.equal(simulation.state.maxShockIndex, maximum);
 });
 
+test('自阀同级位重复拖动不记录事件且不触发频繁移动扣分', () => {
+  const simulation = new SpeedRegulationSimulation('oneStage');
+  simulation.start();
+  for (let index = 0; index < 20; index += 1) simulation.command('auto-brake', 0);
+  const moves = simulation.state.events.filter((event) => event.type === 'auto-brake');
+  const result = new SpeedRegulationAssessment(simulation).result();
+  const technique = result.categories.find((category) => category.name === '制动与充风操作');
+  assert.equal(moves.length, 0);
+  assert.equal(technique.notes.some((note) => note.includes('自阀有效移动')), false);
+});
+
+test('自阀只按真实级位变化计数，超过技能限额时明确记录次数', () => {
+  const simulation = new SpeedRegulationSimulation('oneStage');
+  simulation.start();
+  for (const position of [1, 2, 1, 2, 1]) simulation.command('auto-brake', position);
+  const moves = simulation.state.events.filter((event) => event.type === 'auto-brake');
+  const result = new SpeedRegulationAssessment(simulation).result();
+  const technique = result.categories.find((category) => category.name === '制动与充风操作');
+  assert.equal(moves.length, 5);
+  assert.ok(technique.notes.includes('自阀有效移动5次，超过本技能允许的4次'));
+  assert.equal(technique.score <= 16, true);
+});
+
 test('一段制动标准操作可在目标速度范围通过进站信号机', () => {
   const simulation = runOneStage();
   const result = new SpeedRegulationAssessment(simulation).result();

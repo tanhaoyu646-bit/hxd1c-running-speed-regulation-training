@@ -56,6 +56,8 @@ export const SCENARIOS = Object.freeze({
     finishDistance: 5600,
     targetSpeed: 40,
     brakeTargetNotches: Object.freeze([4]),
+    // 一次制动允许初次减压、最多两次追加和一次缓解；只统计真实级位变化。
+    autoBrakeMoveLimit: 4,
     // 保留现有信号机里程，制动时机统一按信号机相对距离考核。
     brakeWindows: Object.freeze([
       Object.freeze({ signalId: 'second-through', offsetMin: 550, offsetMax: 750, label: '第二接近通过信号机后550—750 m' }),
@@ -101,6 +103,8 @@ export const SCENARIOS = Object.freeze({
     finishDistance: 5600,
     targetSpeed: 40,
     brakeTargetNotches: Object.freeze([9, 4]),
+    // 两次制动各允许初次减压、一次追加和一次缓解；只统计真实级位变化。
+    autoBrakeMoveLimit: 6,
     brakeWindows: Object.freeze([
       Object.freeze({ signalId: 'second-through', offsetMin: 0, offsetMax: 200, label: '第二接近通过信号机后0—200 m' }),
       Object.freeze({ signalId: 'first-through', offsetMin: -240, offsetMax: -40, label: '第一接近通过信号机前240—40 m' }),

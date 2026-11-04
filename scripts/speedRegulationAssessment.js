@@ -7,6 +7,11 @@ function brakeApplications(events) {
     && event.previous?.autoBrake === 0);
 }
 
+function effectiveAutoBrakeMoves(events) {
+  return events.filter((event) => event.type === 'auto-brake'
+    && Number(event.value) !== Number(event.previous?.autoBrake));
+}
+
 function preparedForBrake(event, requiredNotch) {
   return Boolean(event) && event.traction === requiredNotch && event.sideRelease === true;
 }
@@ -163,13 +168,15 @@ export class SpeedRegulationAssessment {
     let technique = 20;
     const targetNotches = scenario.brakeTargetNotches || [4];
     const entryPass = events.find((event) => event.type === 'entry-pass');
+    const autoBrakeMoves = effectiveAutoBrakeMoves(events);
+    const autoBrakeMoveLimit = scenario.autoBrakeMoveLimit ?? (scenario.id === 'twoStage' ? 6 : 4);
     if (events.some((event) => event.type === 'auto-brake' && event.value >= 4)) {
       technique -= 6;
       techniqueNotes.push('出现常用Ⅳ或紧急级位');
     }
-    if (events.filter((event) => event.type === 'auto-brake').length > 9) {
+    if (autoBrakeMoves.length > autoBrakeMoveLimit) {
       technique -= 4;
-      techniqueNotes.push('自阀往复调整次数过多');
+      techniqueNotes.push(`自阀有效移动${autoBrakeMoves.length}次，超过本技能允许的${autoBrakeMoveLimit}次`);
     }
     if (scenario.id === 'oneStage' && applications.length > 1) {
       technique -= 4;
