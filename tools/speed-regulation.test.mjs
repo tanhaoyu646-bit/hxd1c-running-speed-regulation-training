@@ -23,15 +23,15 @@ function runOneStage() {
   for (let index = 0; index < 12_000 && !simulation.state.completed; index += 1) {
     const state = simulation.state;
     if (state.signal.id !== lastSignal && state.signal.id !== 'clear') { simulation.command('callout'); lastSignal = state.signal.id; }
-    if (state.distance > 1850 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
-    if (state.distance > 1950 && !brakeApplied) { simulation.command('auto-brake', 1); brakeApplied = true; }
+    if (state.distance > 2850 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
+    if (state.distance > 2950 && !brakeApplied) { simulation.command('auto-brake', 1); brakeApplied = true; }
     const firstBrake = state.events.find((event) => event.type === 'auto-brake' && event.value > 0);
     if (firstBrake && state.elapsed >= firstBrake.elapsed + 1.5 && !sideReleaseFinished) { simulation.command('side-release', false); sideReleaseFinished = true; }
     if (firstBrake && state.elapsed >= firstBrake.elapsed + 5.2 && !targetSelected) {
       simulation.command('traction', 4);
       targetSelected = true;
     }
-    if (state.distance > 2200 && !pressureAdded) { simulation.command('auto-brake', 2); pressureAdded = true; }
+    if (state.distance > 3200 && !pressureAdded) { simulation.command('auto-brake', 2); pressureAdded = true; }
     if (pressureAdded && state.speed < 48 && !finalRelease) { simulation.command('auto-brake', 0); finalRelease = true; }
     if (state.lkjForcedBrake && state.lkjLevel === 'normal' && state.speed <= state.lkjLimit + 1) simulation.command('lkj-relief');
     simulation.tick(.05);
@@ -112,7 +112,7 @@ test('两个技能配置、里程和状态互相独立，并共用实际信号�
   assert.deepEqual(SCENARIOS.oneStage.brakeTargetNotches, [4]);
   assert.deepEqual(SCENARIOS.twoStage.brakeTargetNotches, [9, 4]);
   assert.deepEqual(SCENARIOS.oneStage.brakeWindows.map(({ signalId, offsetMin, offsetMax }) => ({ signalId, offsetMin, offsetMax })), [
-    { signalId: 'second-through', offsetMin: 550, offsetMax: 750 },
+    { signalId: 'entry', offsetMin: -2300, offsetMax: -1800 },
   ]);
   assert.deepEqual(SCENARIOS.twoStage.brakeWindows.map(({ signalId, offsetMin, offsetMax }) => ({ signalId, offsetMin, offsetMax })), [
     { signalId: 'second-through', offsetMin: 0, offsetMax: 200 },

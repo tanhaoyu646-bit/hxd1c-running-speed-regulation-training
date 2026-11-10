@@ -67,9 +67,9 @@ export const SCENARIOS = Object.freeze({
     // 一次制动允许初次减压、最多两次追加和一次缓解；只统计真实级位变化。
     autoBrakeMoveLimit: 4,
     sideReleaseAssessment: commonSideReleaseAssessment,
-    // 保留现有信号机里程，制动时机统一按信号机相对距离考核。
+    // 保留现有信号机里程：距进站信号机2300—1800 m均为合格制动时机。
     brakeWindows: Object.freeze([
-      Object.freeze({ signalId: 'second-through', offsetMin: 550, offsetMax: 750, label: '第二接近通过信号机后550—750 m' }),
+      Object.freeze({ signalId: 'entry', offsetMin: -2300, offsetMax: -1800, label: '距进站信号机2300—1800 m' }),
     ]),
     maximumEntrySpeed: 45,
     stationName: '前方车站',
