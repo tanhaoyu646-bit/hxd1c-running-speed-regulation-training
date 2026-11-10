@@ -77,6 +77,18 @@ function runTwoStage() {
   return simulation;
 }
 
+function measureInitialBrakeDistance(dt) {
+  const simulation = new SpeedRegulationSimulation('oneStage');
+  simulation.start();
+  simulation.command('side-release', true);
+  simulation.command('auto-brake', 1);
+  for (let index = 0; index < 100_000 && simulation.state.speed > 45 && !simulation.state.completed; index += 1) {
+    if (simulation.state.elapsed >= 5 && simulation.state.traction !== 4) simulation.command('traction', 4);
+    simulation.tick(dt);
+  }
+  return simulation.state;
+}
+
 test('两个技能配置、里程和状态互相独立，并共用实际信号位置', () => {
   assert.notEqual(SCENARIOS.oneStage, SCENARIOS.twoStage);
   assert.equal(SCENARIOS.oneStage.initialSpeed, 110);
@@ -124,6 +136,15 @@ test('途中调速固定按平道运行，网压电流与风压指针使用实�
   assert.ok(simulation.state.trainPipe < 600);
   assert.ok(simulation.state.brakeCylinder > 0);
   assert.ok(simulation.state.mainReservoir < 900);
+});
+
+test('标准18编组旅客列车以初制位可在1800米内完成110至45km/h减速', () => {
+  for (const dt of [0.016, 0.033, 0.05, 0.08]) {
+    const state = measureInitialBrakeDistance(dt);
+    assert.ok(state.speed <= 45, `dt=${dt}, speed=${state.speed}`);
+    assert.ok(state.distance >= 1700 && state.distance <= 1800, `dt=${dt}, distance=${state.distance}`);
+    assert.equal(state.events.some((event) => event.type === 'limit-line-exceeded'), false);
+  }
 });
 
 test('牵引级位按10 km/h一级给定目标速度，超过给定速度不输出动力', () => {

@@ -238,7 +238,7 @@ export class SpeedRegulationSimulation extends EventTarget {
     s.mainReservoir += (clamp(900 - Math.max(0, 600 - s.trainPipe) * 0.07, 820, 900) - s.mainReservoir) * (1 - Math.exp(-dt / 5));
     // 按“标准旅客列车”校准：50 kPa 初减压用于两段制动的第二段，
     // 一段制动若减速不足则需要追加减压，不能用同一制动力硬套两个技能。
-    const pneumaticForce = s.brakeCylinder * 1_200;
+    const pneumaticForce = s.brakeCylinder * (this.scenario.pneumaticForcePerKpa || 1_200);
     const netForce = tractionForce - electricBrake - rollingResistance - pneumaticForce - gradeForce;
     const newAcceleration = netForce / mass;
     const rawJerk = (newAcceleration - this.previousAcceleration) / Math.max(dt, .01);

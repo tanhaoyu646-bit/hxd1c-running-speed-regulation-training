@@ -48,6 +48,8 @@ export const SCENARIOS = Object.freeze({
     initialSpeed: 110,
     initialTraction: 11,
     operatingGrade: TRAINING_GRADE_PERMILLE,
+    // 标准18编组旅客列车：初制位下110→45 km/h制动距离按不超过1800 m标定。
+    pneumaticForcePerKpa: 1900,
     // 起点位于进站前第二架通过信号机外方，完整保留两个自动闭塞分区。
     startOffset: 23880,
     routeWindow: SPEED_ROUTE_WINDOW,
@@ -95,6 +97,7 @@ export const SCENARIOS = Object.freeze({
     initialSpeed: 110,
     initialTraction: 11,
     operatingGrade: TRAINING_GRADE_PERMILLE,
+    pneumaticForcePerKpa: 1900,
     // 同样从第二架通过信号机外方开始；两个技能共用同一组实际信号位置。
     startOffset: 23880,
     routeWindow: SPEED_ROUTE_WINDOW,
