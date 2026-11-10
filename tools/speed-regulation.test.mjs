@@ -15,6 +15,7 @@ function runOneStage() {
   commonStart(simulation);
   let lastSignal = simulation.state.signal.id;
   let sideReleased = false;
+  let sideReleaseFinished = false;
   let brakeApplied = false;
   let pressureAdded = false;
   let targetSelected = false;
@@ -25,6 +26,7 @@ function runOneStage() {
     if (state.distance > 1850 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
     if (state.distance > 1950 && !brakeApplied) { simulation.command('auto-brake', 1); brakeApplied = true; }
     const firstBrake = state.events.find((event) => event.type === 'auto-brake' && event.value > 0);
+    if (firstBrake && state.elapsed >= firstBrake.elapsed + 1.5 && !sideReleaseFinished) { simulation.command('side-release', false); sideReleaseFinished = true; }
     if (firstBrake && state.elapsed >= firstBrake.elapsed + 5.2 && !targetSelected) {
       simulation.command('traction', 4);
       targetSelected = true;
@@ -41,7 +43,10 @@ function runTwoStage() {
   const simulation = new SpeedRegulationSimulation('twoStage');
   commonStart(simulation);
   let lastSignal = simulation.state.signal.id;
-  let sideReleased = false;
+  let firstSideReleased = false;
+  let firstSideReleaseFinished = false;
+  let secondSideReleased = false;
+  let secondSideReleaseFinished = false;
   let firstApplied = false;
   let firstReleased = false;
   let firstTargetSelected = false;
@@ -51,9 +56,10 @@ function runTwoStage() {
   for (let index = 0; index < 20_000 && !simulation.state.completed; index += 1) {
     const state = simulation.state;
     if (state.signal.id !== lastSignal && state.signal.id !== 'clear') { simulation.command('callout'); lastSignal = state.signal.id; }
-    if (state.distance > 1300 && !sideReleased) { simulation.command('side-release', true); sideReleased = true; }
+    if (state.distance > 1300 && !firstSideReleased) { simulation.command('side-release', true); firstSideReleased = true; }
     if (state.distance > 1400 && !firstApplied) { simulation.command('auto-brake', 1); firstApplied = true; }
     const applications = state.events.filter((event) => event.type === 'auto-brake' && event.value > 0 && event.previous?.autoBrake === 0);
+    if (applications[0] && state.elapsed >= applications[0].elapsed + 1.5 && !firstSideReleaseFinished) { simulation.command('side-release', false); firstSideReleaseFinished = true; }
     if (applications[0] && state.elapsed >= applications[0].elapsed + 5.2 && !firstTargetSelected) {
       simulation.command('traction', 9);
       firstTargetSelected = true;
@@ -62,10 +68,12 @@ function runTwoStage() {
       simulation.command('auto-brake', 0);
       firstReleased = true;
     }
+    if (state.distance > 3200 && firstReleased && !secondSideReleased) { simulation.command('side-release', true); secondSideReleased = true; }
     if (state.distance > 3300 && firstReleased && !secondApplied) {
       simulation.command('auto-brake', 1);
       secondApplied = true;
     }
+    if (applications[1] && state.elapsed >= applications[1].elapsed + 1.5 && !secondSideReleaseFinished) { simulation.command('side-release', false); secondSideReleaseFinished = true; }
     if (applications[1] && state.elapsed >= applications[1].elapsed + 5.2 && !finalTargetSelected) {
       simulation.command('traction', 4);
       finalTargetSelected = true;
@@ -186,10 +194,11 @@ test('考评进度按真实状态核对呼唤、有级位制动、单缓和目�
   simulation.command('callout');
   simulation.command('side-release', true);
   simulation.command('auto-brake', 1);
+  for (let index = 0; index < 22; index += 1) simulation.tick(.05);
   assert.equal(assessment.progress().done, 4);
   simulation.command('lkj-open');
   assert.equal(assessment.progress().done, 5);
-  for (let index = 0; index < 110; index += 1) simulation.tick(.05);
+  for (let index = 0; index < 88; index += 1) simulation.tick(.05);
   simulation.command('traction', 4);
   for (let index = 0; index < 12; index += 1) simulation.tick(.05);
   assert.equal(assessment.progress().done, 6);
@@ -214,6 +223,32 @@ test('制动事件保存有级位与单缓状态，常用制动初期牵引电�
   simulation.command('shock-reset');
   assert.equal(simulation.state.shockStickFallen, 0);
   assert.equal(simulation.state.maxShockIndex, maximum);
+});
+
+test('单阀侧缓在初制动作前后5秒内保持至少1秒即可计分', () => {
+  const simulation = new SpeedRegulationSimulation('oneStage');
+  simulation.start();
+  simulation.command('side-release', true);
+  for (let index = 0; index < 30; index += 1) simulation.tick(.05);
+  simulation.command('side-release', false);
+  for (let index = 0; index < 20; index += 1) simulation.tick(.05);
+  simulation.command('auto-brake', 1);
+  const result = new SpeedRegulationAssessment(simulation).result();
+  const preparation = result.categories.find((category) => category.name === '制动前准备');
+  assert.equal(simulation.state.events.find((event) => event.type === 'auto-brake').sideRelease, false);
+  assert.equal(preparation.notes.some((note) => note.includes('单阀侧缓')), false);
+});
+
+test('单阀侧缓不足1秒不计入制动准备评分', () => {
+  const simulation = new SpeedRegulationSimulation('oneStage');
+  simulation.start();
+  simulation.command('auto-brake', 1);
+  simulation.command('side-release', true);
+  for (let index = 0; index < 10; index += 1) simulation.tick(.05);
+  simulation.command('side-release', false);
+  const result = new SpeedRegulationAssessment(simulation).result();
+  const preparation = result.categories.find((category) => category.name === '制动前准备');
+  assert.ok(preparation.notes.includes('首次空气制动前后未保持至少1秒单阀侧缓'));
 });
 
 test('自阀同级位重复拖动不记录事件且不触发频繁移动扣分', () => {

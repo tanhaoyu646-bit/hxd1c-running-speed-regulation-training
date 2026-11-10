@@ -13,7 +13,28 @@ function effectiveAutoBrakeMoves(events) {
 }
 
 function preparedForBrake(event, requiredNotch) {
-  return Boolean(event) && event.traction === requiredNotch && event.sideRelease === true;
+  return Boolean(event) && event.traction === requiredNotch;
+}
+
+function sideReleaseAroundBrake(state, brake, scenario) {
+  if (!brake) return false;
+  const rule = scenario.sideReleaseAssessment || { beforeSeconds: 5, afterSeconds: 5, minimumDurationSeconds: 1 };
+  const windowStart = brake.elapsed - rule.beforeSeconds;
+  const windowEnd = brake.elapsed + rule.afterSeconds;
+  const intervals = [];
+  let activeStart = null;
+  for (const event of state.events) {
+    if (event.type !== 'side-release') continue;
+    if (event.value === true && activeStart == null) activeStart = event.elapsed;
+    if (event.value === false && activeStart != null) {
+      intervals.push({ start: activeStart, end: event.elapsed });
+      activeStart = null;
+    }
+  }
+  if (activeStart != null) intervals.push({ start: activeStart, end: state.elapsed });
+  return intervals.some((interval) => interval.start >= windowStart
+    && interval.start <= windowEnd
+    && interval.end - interval.start >= rule.minimumDurationSeconds);
 }
 
 function brakeWindow(scenario, index) {
@@ -69,14 +90,14 @@ export class SpeedRegulationAssessment {
       events.some((event) => event.type === 'lkj-open'),
       calls.every((item) => item.done),
       firstBrake?.traction === scenario.initialTraction,
-      firstBrake?.sideRelease === true,
+      sideReleaseAroundBrake(state, firstBrake, scenario),
       Boolean(firstBrake),
     ];
     if (scenario.id === 'twoStage') {
       const secondBrake = applications[1];
       checks.push(targetNotchMaintained(state, firstBrake, targetNotches[0], firstRelease?.elapsed));
       checks.push(Boolean(firstRelease), events.some((event) => event.type === 'pipe-recharged'));
-      checks.push(preparedForBrake(secondBrake, targetNotches[0]), Boolean(secondBrake));
+      checks.push(preparedForBrake(secondBrake, targetNotches[0]) && sideReleaseAroundBrake(state, secondBrake, scenario), Boolean(secondBrake));
       checks.push(targetNotchMaintained(state, secondBrake, targetNotches[1], entryPass?.elapsed));
     } else {
       checks.push(targetNotchMaintained(state, firstBrake, targetNotches[0], entryPass?.elapsed));
@@ -126,9 +147,9 @@ export class SpeedRegulationAssessment {
       preparation -= 8;
       preparationNotes.push(`首次空气制动时牵引手柄未保持${scenario.initialTraction}级`);
     }
-    if (!firstBrake || firstBrake.sideRelease !== true) {
+    if (!sideReleaseAroundBrake(state, firstBrake, scenario)) {
       preparation -= 7;
-      preparationNotes.push('首次空气制动时未实施单缓');
+      preparationNotes.push('首次空气制动前后未保持至少1秒单阀侧缓');
     }
 
     const timingNotes = [];
@@ -205,9 +226,9 @@ export class SpeedRegulationAssessment {
         technique -= 2;
         techniqueNotes.push(`第二次空气制动时牵引主手柄未保持${targetNotches[0]}级`);
       }
-      if (!secondBrake || secondBrake.sideRelease !== true) {
+      if (!sideReleaseAroundBrake(state, secondBrake, scenario)) {
         technique -= 2;
-        techniqueNotes.push('第二次空气制动时未实施单缓');
+        techniqueNotes.push('第二次空气制动前后未保持至少1秒单阀侧缓');
       }
       if (!targetNotchMaintained(state, secondBrake, targetNotches[1], entryPass?.elapsed)) {
         technique -= 4;
